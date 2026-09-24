@@ -2,7 +2,7 @@ from pydantic import BaseModel, HttpUrl
 
 
 class AnalyzeRequest(BaseModel):
-    repo_url: HttpUrl
+    company_name: str
     selected_phases: list[str]
     work_id: str | None = None
     provider: str = "openrouter"
