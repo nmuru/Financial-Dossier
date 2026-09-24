@@ -415,7 +415,7 @@ async def _run_agent(*, phase: str, phase_name: str, repository: Path, phase_int
         handoff = "\n\nPrevious phase output is supporting context only. Verify important claims against repository evidence.\n\n" + previous_output[:20000]
 
     common_instructions = """You are performing an evidence-driven SDLC reverse-engineering phase.
-The repository has already been cloned and deterministic repository intelligence has already been collected before your first turn. Treat that intelligence as the primary evidence index.
+The financial source data has already been acquired and deterministic source intelligence has already been collected before your first turn. Treat that intelligence as the primary evidence index.
 Do not repeat repository-wide discovery or reread files merely to reconstruct information already present in the intelligence package. Use repository tools only for a specific ambiguity, missing source passage, or precision check.
 Do not invent details. Distinguish verified facts, reasonable inferences, and unknowns when evidence is incomplete.
 The repository is read-only. Do not modify it.
