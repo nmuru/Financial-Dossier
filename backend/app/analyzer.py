@@ -158,10 +158,6 @@ def analyze_repository(company_name: str, phases_per_batch: int = settings.phase
     try:
         _check_cancelled(run_control)
         max_bytes = settings.max_repository_size_mb * 1024 * 1024
-        github_size_bytes = None
-        if github_size_bytes is not None:
-            diagnostics.run_event("repository_size_checked_before_clone", repository_size_bytes=github_size_bytes)
-            if github_size_bytes > max_bytes: raise _repository_size_limit_error()
         with tempfile.TemporaryDirectory(prefix="reverse-engineer-") as tmp:
             workspace = Path(tmp); diagnostics.run_event("workspace_created", workspace=str(workspace)); repository = download_company_facts(company_name, workspace, run_control=run_control); _check_cancelled(run_control)
             size_bytes = repository_size_bytes(repository)
