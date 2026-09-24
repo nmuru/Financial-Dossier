@@ -20,7 +20,7 @@ from .cancellable_research import run_phase_research, run_repository_research
 from .semantic_research import write_research_artifact
 from .review_runner import run_review_code_base, ReviewRunnerError
 
-PHASES = [("business-purpose", "Business Purpose"), ("scope", "Scope"), ("features", "Features"), ("business-requirements", "Business Requirements"), ("software-requirements", "Software Requirements"), ("technology-architecture", "Technology Architecture"), ("design-pattern", "Design Pattern"), ("high-level-design", "High-Level Design"), ("low-level-design", "Low-Level Design"), ("implementation-detail", "Implementation Detail"), ("testing-harness", "Testing Harness"), ("future-directions", "Future Directions")]
+PHASES = [("revenue-earnings-engine", "Revenue & Earnings Engine"), ("financial-resilience", "Financial Resilience"), ("capital-cash-deployment", "Capital & Cash Deployment"), ("accounting-signals-anomalies", "Accounting Signals & Anomalies")]
 REVIEW_PHASE = ("review-code-base", "Review Code Base")
 PhaseCompleteCallback = Callable[[dict], None]
 
@@ -157,8 +157,7 @@ def analyze_repository(company_name: str, phases_per_batch: int = settings.phase
     results: dict[str, dict] = {}; failures: list[dict] = []
     try:
         _check_cancelled(run_control)
-        max_bytes = settings.max_repository_size_mb * 1024 * 1024
-        with tempfile.TemporaryDirectory(prefix="reverse-engineer-") as tmp:
+            with tempfile.TemporaryDirectory(prefix="reverse-engineer-") as tmp:
             workspace = Path(tmp); diagnostics.run_event("workspace_created", workspace=str(workspace)); repository = download_company_facts(company_name, workspace, run_control=run_control); _check_cancelled(run_control)
             # size_bytes = repository_size_bytes(repository)
             # if size_bytes > max_bytes: raise _repository_size_limit_error()
