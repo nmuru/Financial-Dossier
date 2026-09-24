@@ -7,8 +7,8 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Callable, Optional
 
-from .agent_runner import github_repository_size_bytes, repository_size_bytes, run_phase_agent
-from .cancellable_clone import clone_repository
+from .agent_runner import repository_size_bytes, run_phase_agent
+from .cancellable_download import download_company_facts
 from .config import settings
 from .exporter import create_download_package
 from .phase_intelligence import build_phase_intelligence
@@ -104,8 +104,8 @@ def _phase_context(phase: str, deterministic: str, repository_research: str, pha
     return "\n\n".join([deterministic, "UPSTREAM SEMANTIC RESEARCH BRIEF (NAVIGATION AID — NOT AUTHORITATIVE EVIDENCE)", "Use this brief to prioritize investigation and formulate hypotheses. Do not treat it as verified. Material claims must be checked against repository source before entering final documentation.", repository_research, f"PHASE-SPECIFIC SEMANTIC RESEARCH BRIEF FOR {phase} (NAVIGATION AID — NOT AUTHORITATIVE EVIDENCE)", "Use the prioritized files, symbols, and searches below to perform targeted source verification. Do not skip material repository inspection merely because a hypothesis is stated here.", phase_research])
 
 
-def analyze_repository(repo_url: str, phases_per_batch: int = settings.phases_per_batch, number_of_batches: Optional[int] = None, batch_mode: str = "parallel", on_phase_complete: Optional[PhaseCompleteCallback] = None, selected_phases: Optional[list[str]] = None, work_id: Optional[str] = None, provider: str = "openrouter", model: str = "openrouter/free", api_key: Optional[str] = None, run_control: Optional[RunControl] = None, objective: str = "document") -> dict:
-    if not repo_url or not repo_url.strip(): raise ValueError("repo_url cannot be empty")
+def analyze_repository(company_name: str, phases_per_batch: int = settings.phases_per_batch, number_of_batches: Optional[int] = None, batch_mode: str = "parallel", on_phase_complete: Optional[PhaseCompleteCallback] = None, selected_phases: Optional[list[str]] = None, work_id: Optional[str] = None, provider: str = "openrouter", model: str = "openrouter/free", api_key: Optional[str] = None, run_control: Optional[RunControl] = None, objective: str = "document") -> dict:
+    if not company_name or not company_name.strip(): raise ValueError("company_name cannot be empty")
     provider = (provider or "").strip().lower()
     if provider not in {"openrouter", "openai"}: raise ValueError("This backend currently supports OpenRouter and OpenAI through the OpenAI Agents SDK")
     if not model or not model.strip(): raise ValueError("model cannot be empty")
@@ -158,15 +158,15 @@ def analyze_repository(repo_url: str, phases_per_batch: int = settings.phases_pe
     try:
         _check_cancelled(run_control)
         max_bytes = settings.max_repository_size_mb * 1024 * 1024
-        github_size_bytes = github_repository_size_bytes(repo_url)
+        github_size_bytes = None
         if github_size_bytes is not None:
             diagnostics.run_event("repository_size_checked_before_clone", repository_size_bytes=github_size_bytes)
             if github_size_bytes > max_bytes: raise _repository_size_limit_error()
         with tempfile.TemporaryDirectory(prefix="reverse-engineer-") as tmp:
-            workspace = Path(tmp); diagnostics.run_event("workspace_created", workspace=str(workspace)); repository = clone_repository(repo_url, workspace, run_control=run_control); _check_cancelled(run_control)
+            workspace = Path(tmp); diagnostics.run_event("workspace_created", workspace=str(workspace)); repository = download_company_facts(company_name, workspace, run_control=run_control); _check_cancelled(run_control)
             size_bytes = repository_size_bytes(repository)
             if size_bytes > max_bytes: raise _repository_size_limit_error()
-            diagnostics.run_event("repository_cloned", repository=str(repository), repository_size_bytes=size_bytes)
+            diagnostics.run_event("financial_source_downloaded", repository=str(repository), repository_size_bytes=size_bytes)
             intelligence: RepositoryIntelligence = collect_repository_intelligence(repository); diagnostics.run_event("repository_intelligence_collected", files_considered=intelligence.file_count); _check_cancelled(run_control)
             diagnostics.run_event("repository_research_started")
             repository_research = run_repository_research(intelligence=intelligence, repository=repository, provider=provider, model=model, api_key=api_key, run_control=run_control); _check_cancelled(run_control)
