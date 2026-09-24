@@ -30,9 +30,6 @@ def _check_cancelled(run_control: Optional[RunControl]) -> None:
         raise RunCancelled("Analysis stopped by the user.")
 
 
-def _repository_size_limit_error() -> ValueError:
-    return ValueError(f"This app does not support repositories larger than {settings.max_repository_size_mb} MB. We hope to enhance support for larger repositories later.")
-
 
 def _run_single_phase(phase_key: str, phase_name: str, repository: Path, phase_intelligence: str, output_run_dir: Path, run_id: str, provider: str, model: str, api_key: str, diagnostics: Optional[ResourceDiagnostics] = None, batch_index: Optional[int] = None, run_control: Optional[RunControl] = None, objective: str = "document") -> dict:
     _check_cancelled(run_control)
