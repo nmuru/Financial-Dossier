@@ -7,7 +7,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Callable, Optional
 
-from .agent_runner import repository_size_bytes, run_phase_agent
+from .agent_runner import run_phase_agent
 from .cancellable_download import download_company_facts
 from .config import settings
 from .exporter import create_download_package
@@ -160,9 +160,11 @@ def analyze_repository(company_name: str, phases_per_batch: int = settings.phase
         max_bytes = settings.max_repository_size_mb * 1024 * 1024
         with tempfile.TemporaryDirectory(prefix="reverse-engineer-") as tmp:
             workspace = Path(tmp); diagnostics.run_event("workspace_created", workspace=str(workspace)); repository = download_company_facts(company_name, workspace, run_control=run_control); _check_cancelled(run_control)
-            size_bytes = repository_size_bytes(repository)
-            if size_bytes > max_bytes: raise _repository_size_limit_error()
-            diagnostics.run_event("financial_source_downloaded", repository=str(repository), repository_size_bytes=size_bytes)
+            # size_bytes = repository_size_bytes(repository)
+            # if size_bytes > max_bytes: raise _repository_size_limit_error()
+            diagnostics.run_event("financial_source_downloaded", repository=str(repository), 
+                                #   repository_size_bytes=size_bytes
+                                  )
             intelligence: RepositoryIntelligence = collect_repository_intelligence(repository); diagnostics.run_event("repository_intelligence_collected", files_considered=intelligence.file_count); _check_cancelled(run_control)
             diagnostics.run_event("repository_research_started")
             repository_research = run_repository_research(intelligence=intelligence, repository=repository, provider=provider, model=model, api_key=api_key, run_control=run_control); _check_cancelled(run_control)

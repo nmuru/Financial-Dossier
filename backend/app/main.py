@@ -23,7 +23,10 @@ from .schemas import AnalyzeRequest
 logger = logging.getLogger(__name__)
 
 app = FastAPI(title="ReverseEngineer-SDLC API", version="0.2.0")
-app.add_middleware(CORSMiddleware, allow_origins=[origin.strip() for origin in settings.allowed_origins.split(",") if origin.strip()], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
+app.add_middleware(CORSMiddleware, 
+                #    allow_origins=[origin.strip() for origin in settings.allowed_origins.split(",") if origin.strip()], 
+                   allow_origins=["http://localhost:3000"],
+                   allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
 
 _run_controls: dict[str, RunControl] = {}
 _run_controls_lock = Lock()
@@ -260,25 +263,25 @@ def analyze(request: AnalyzeRequest) -> StreamingResponse:
                     event_queue.put({"type": "analysis_failed", "repo_url": company_name, "run_id": resolved_run_id, "error": MemoryCapacityError.user_message})
                 else:
                     control.finish("cancelled")
-                    event_queue.put({"type": "analysis_cancelled", "repo_url": repo_url, "run_id": resolved_run_id, "completed_phases": list(results["results"].keys()), "failed_phases": results.get("failures", [])})
+                    event_queue.put({"type": "analysis_cancelled", "repo_url": company_name, "run_id": resolved_run_id, "completed_phases": list(results["results"].keys()), "failed_phases": results.get("failures", [])})
             else:
                 control.finish("completed")
-                event_queue.put({"type": "analysis_completed", "repo_url": repo_url, "run_id": results["run_id"], "completed_phases": list(results["results"].keys()), "failed_phases": results.get("failures", [])})
+                event_queue.put({"type": "analysis_completed", "repo_url": company_name, "run_id": results["run_id"], "completed_phases": list(results["results"].keys()), "failed_phases": results.get("failures", [])})
         except RunCancelled:
             if memory_guard.triggered.is_set():
                 control.finish("failed", MemoryCapacityError.user_message)
                 logger.warning("Analysis stopped by memory capacity guard work_id=%s", control.run_id)
-                event_queue.put({"type": "analysis_failed", "repo_url": repo_url, "run_id": control.run_id, "error": MemoryCapacityError.user_message})
+                event_queue.put({"type": "analysis_failed", "repo_url": company_name, "run_id": control.run_id, "error": MemoryCapacityError.user_message})
             else:
                 control.finish("cancelled")
-                event_queue.put({"type": "analysis_cancelled", "repo_url": repo_url, "run_id": control.run_id, "completed_phases": list(control.snapshot()["completed_phases"]), "failed_phases": control.snapshot()["failures"]})
+                event_queue.put({"type": "analysis_cancelled", "repo_url": company_name, "run_id": control.run_id, "completed_phases": list(control.snapshot()["completed_phases"]), "failed_phases": control.snapshot()["failures"]})
         except (AgentRunnerError, ValueError) as exc:
             control.finish("failed", str(exc))
-            event_queue.put({"type": "analysis_failed", "repo_url": repo_url, "run_id": control.run_id, "error": str(exc)})
+            event_queue.put({"type": "analysis_failed", "repo_url": company_name, "run_id": control.run_id, "error": str(exc)})
         except Exception as exc:
             control.finish("failed", f"Analysis failed due to an unexpected backend error: {type(exc).__name__}: {exc}")
             logger.exception("Unexpected analysis failure: company_name=%s", company_name)
-            event_queue.put({"type": "analysis_failed", "repo_url": repo_url, "run_id": control.run_id, "error": f"Analysis failed due to an unexpected backend error: {type(exc).__name__}: {exc}"})
+            event_queue.put({"type": "analysis_failed", "repo_url": company_name, "run_id": control.run_id, "error": f"Analysis failed due to an unexpected backend error: {type(exc).__name__}: {exc}"})
         finally:
             memory_guard.stop()
 
