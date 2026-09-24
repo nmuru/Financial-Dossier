@@ -105,7 +105,8 @@ def _resolve_skill_resources(phase: str, output_run_dir: Path) -> dict[str, Any]
         "skill": "dynamic-skill-discovery",
         "artifacts": {},
         "tools": {
-            "repository": ["list_files","glob","grep", "read_file", "search_repository"],
+            "repository": ["list_files", "glob", "grep", "read_file", "search_repository"],
+            "structured_json": ["inspect_json_structure", "search_json", "read_json_value", "query_json"],
             "runtime_resources": ["list_resources", "read_resource"],
             "output_content": ["list_previous_phase_outputs", "read_previous_phase_output"],
         },
@@ -275,14 +276,238 @@ def _build_tools(phase: str, repository: Path, output_run_dir: Path):
 
     @function_tool
     def read_file(path: str, max_chars: int = 30000) -> str:
-        """Read a UTF-8 text file for conditional follow-up evidence not already present in deterministic intelligence."""
+        """Read a bounded slice of a normal workspace document.
+
+        Structured JSON evidence should be queried with the JSON tools instead of
+        requesting the entire document. The server enforces a hard response limit
+        regardless of the requested max_chars.
+        """
         target = safe_path(path)
         if not target.is_file():
             return "File does not exist or is not a regular file."
+
+        # Never allow a model to turn the generic document tool into a whole-JSON
+        # context injection. JSON resources have their own bounded query interface.
+        if target.suffix.lower() == ".json":
+            return (
+                "Direct read of JSON resources is restricted. "
+                "Use inspect_json_structure, search_json, read_json_value, or "
+                "query_json to retrieve bounded structured evidence."
+            )
+
+        hard_limit = 30_000
+        bounded_chars = max(1, min(int(max_chars), hard_limit))
         try:
-            return target.read_text(encoding="utf-8", errors="replace")[:max_chars]
+            return target.read_text(encoding="utf-8", errors="replace")[:bounded_chars]
         except OSError as exc:
             return f"Could not read file: {exc}"
+
+    def _load_json_resource(path: str) -> tuple[Path | None, Any | None, str | None]:
+        """Load one workspace JSON resource without exposing it wholesale."""
+        target = safe_path(path)
+        if not target.is_file():
+            return None, None, "JSON resource does not exist or is not a regular file."
+        if target.suffix.lower() != ".json":
+            return None, None, "The requested resource is not a JSON file."
+        try:
+            payload = json.loads(target.read_text(encoding="utf-8"))
+        except json.JSONDecodeError as exc:
+            return None, None, f"Invalid JSON resource: {exc}"
+        except OSError as exc:
+            return None, None, f"Could not read JSON resource: {exc}"
+        return target, payload, None
+
+    def _json_type(value: Any) -> str:
+        if value is None:
+            return "null"
+        if isinstance(value, dict):
+            return "object"
+        if isinstance(value, list):
+            return "array"
+        if isinstance(value, bool):
+            return "boolean"
+        if isinstance(value, (int, float)):
+            return "number"
+        return "string"
+
+    def _json_pointer_get(payload: Any, pointer: str) -> Any:
+        if pointer in ("", "/"):
+            return payload
+        current = payload
+        for raw_part in pointer.strip("/").split("/"):
+            part = raw_part.replace("~1", "/").replace("~0", "~")
+            if isinstance(current, dict):
+                if part not in current:
+                    raise KeyError(part)
+                current = current[part]
+            elif isinstance(current, list):
+                current = current[int(part)]
+            else:
+                raise KeyError(part)
+        return current
+
+    @function_tool
+    def inspect_json_structure(path: str = "companyfacts.json", json_pointer: str = "", max_items: int = 100) -> str:
+        """Inspect the structure of a JSON resource without returning its full data.
+
+        Returns bounded keys, array lengths, and scalar metadata. Use this first
+        when the schema is unfamiliar.
+        """
+        _, payload, error = _load_json_resource(path)
+        if error:
+            return error
+        try:
+            value = _json_pointer_get(payload, json_pointer)
+        except (KeyError, IndexError, ValueError) as exc:
+            return f"JSON path not found: {json_pointer} ({exc})"
+
+        if isinstance(value, dict):
+            keys = list(value.keys())
+            shown = keys[:max(1, min(int(max_items), 200))]
+            suffix = " [truncated]" if len(keys) > len(shown) else ""
+            return json.dumps({
+                "path": json_pointer or "/",
+                "type": "object",
+                "key_count": len(keys),
+                "keys": shown,
+                "truncated": bool(suffix),
+            }, ensure_ascii=False)
+        if isinstance(value, list):
+            return json.dumps({
+                "path": json_pointer or "/",
+                "type": "array",
+                "length": len(value),
+                "item_types": sorted({_json_type(item) for item in value[:200]}),
+            }, ensure_ascii=False)
+        return json.dumps({
+            "path": json_pointer or "/",
+            "type": _json_type(value),
+            "value": value,
+        }, ensure_ascii=False)
+
+    @function_tool
+    def search_json(path: str = "companyfacts.json", query: str = "", max_results: int = 50) -> str:
+        """Search JSON keys and scalar values and return only small matching paths.
+
+        This is schema-independent discovery. It never returns whole JSON objects
+        or arrays and is capped server-side.
+        """
+        _, payload, error = _load_json_resource(path)
+        if error:
+            return error
+        needle = query.strip().lower()
+        if not needle:
+            return "A non-empty JSON search query is required."
+
+        results: list[str] = []
+        hard_limit = max(1, min(int(max_results), 100))
+
+        def walk(value: Any, pointer: str) -> None:
+            if len(results) >= hard_limit:
+                return
+            if isinstance(value, dict):
+                for key, child in value.items():
+                    child_pointer = f"{pointer}/{str(key).replace('~', '~0').replace('/', '~1')}"
+                    if needle in str(key).lower():
+                        results.append(child_pointer)
+                        if len(results) >= hard_limit:
+                            return
+                    walk(child, child_pointer)
+            elif isinstance(value, list):
+                for index, child in enumerate(value):
+                    walk(child, f"{pointer}/{index}")
+
+        walk(payload, "")
+        return json.dumps({
+            "query": query,
+            "matches": results,
+            "count": len(results),
+            "truncated": len(results) >= hard_limit,
+        }, ensure_ascii=False)
+
+    @function_tool
+    def read_json_value(path: str, json_pointer: str, max_chars: int = 12000) -> str:
+        """Read one bounded JSON value by RFC 6901-style JSON Pointer.
+
+        Large objects and arrays are summarized rather than returned wholesale.
+        """
+        _, payload, error = _load_json_resource(path)
+        if error:
+            return error
+        try:
+            value = _json_pointer_get(payload, json_pointer)
+        except (KeyError, IndexError, ValueError) as exc:
+            return f"JSON path not found: {json_pointer} ({exc})"
+
+        hard_limit = 12_000
+        if isinstance(value, (dict, list)):
+            raw = json.dumps(value, ensure_ascii=False)
+            if len(raw) > hard_limit:
+                return json.dumps({
+                    "path": json_pointer,
+                    "type": _json_type(value),
+                    "message": "Value exceeds the direct JSON value limit. Inspect structure or query a narrower path.",
+                    "serialized_chars": len(raw),
+                }, ensure_ascii=False)
+        else:
+            raw = json.dumps(value, ensure_ascii=False)
+
+        return raw[:max(1, min(int(max_chars), hard_limit))]
+
+    @function_tool
+    def query_json(path: str, json_pointer: str = "", key: str = "", value: str = "", max_results: int = 50) -> str:
+        """Query objects/arrays in a JSON resource and return bounded matching records.
+
+        Use this for structured retrieval when the exact schema is partly known.
+        Matching is performed locally; only matching records are returned.
+        Results are capped by the server.
+        """
+        _, payload, error = _load_json_resource(path)
+        if error:
+            return error
+
+        try:
+            target = _json_pointer_get(payload, json_pointer)
+        except (KeyError, IndexError, ValueError) as exc:
+            return f"JSON path not found: {json_pointer} ({exc})"
+
+        if not isinstance(target, (dict, list)):
+            return json.dumps({"path": json_pointer, "value": target}, ensure_ascii=False)
+
+        needle_key = key.strip().lower()
+        needle_value = value.strip().lower()
+        matches: list[Any] = []
+        hard_limit = max(1, min(int(max_results), 50))
+
+        candidates = target.items() if isinstance(target, dict) else enumerate(target)
+        for item_key, item_value in candidates:
+            if len(matches) >= hard_limit:
+                break
+            record_text = json.dumps(item_value, ensure_ascii=False).lower()
+            key_match = not needle_key or needle_key in str(item_key).lower()
+            value_match = not needle_value or needle_value in record_text
+            if key_match and value_match:
+                matches.append({"key": item_key, "value": item_value})
+
+        serialized = json.dumps(matches, ensure_ascii=False)
+        if len(serialized) > 30_000:
+            # Keep each returned record bounded as well as the number of records.
+            compact: list[Any] = []
+            used = 0
+            for match in matches:
+                piece = json.dumps(match, ensure_ascii=False)
+                if used + len(piece) + 2 > 30_000:
+                    break
+                compact.append(match)
+                used += len(piece) + 2
+            matches = compact
+
+        return json.dumps({
+            "path": json_pointer or "/",
+            "matches": matches,
+            "count": len(matches),
+            "truncated": len(matches) >= hard_limit,
+        }, ensure_ascii=False)
 
     @function_tool
     def search_repository(query: str, max_results: int = 100) -> str:
@@ -351,6 +576,10 @@ def _build_tools(phase: str, repository: Path, output_run_dir: Path):
         grep,
         read_file,
         search_repository,
+        inspect_json_structure,
+        search_json,
+        read_json_value,
+        query_json,
         list_resources,
         read_resource,
         list_previous_phase_outputs,
