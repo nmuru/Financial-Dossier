@@ -215,7 +215,7 @@ export default function Home() {
     event.preventDefault();
     const analysesToRun = selectedPhases.filter((analysis) => !completedPhases.includes(analysis));
     if (!provider || !model.trim() || !apiKey.trim()) { setError("Enter an AI provider, model, and API key before starting."); return; }
-    if (!repoUrl.trim() || analysesToRun.length === 0) { setError("Enter a repository URL and select at least one new SDLC analysis before starting."); return; }
+    if (!repoUrl.trim() || analysesToRun.length === 0) { setError("Enter a company name and select at least one new financial analysis before starting."); return; }
     viewedCompletedPhaseRef.current = null;
     continuationStartingRef.current = Boolean(runId && !isDemo);
     const nextRunId = runId && !isDemo ? runId : makeRunId();
@@ -233,7 +233,7 @@ export default function Home() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          repo_url: repoUrl,
+          company_name: repoUrl,
           selected_analyses: analysesToRun,
           work_id: nextRunId,
           provider,
