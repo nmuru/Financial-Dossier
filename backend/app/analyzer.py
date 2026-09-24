@@ -101,7 +101,15 @@ def _run_batch(batch: list[tuple[str, str]], repository: Path, phase_packages: d
 
 
 def _phase_context(phase: str, deterministic: str, repository_research: str, phase_research: str) -> str:
-    return "\n\n".join([deterministic, "UPSTREAM SEMANTIC RESEARCH BRIEF (NAVIGATION AID — NOT AUTHORITATIVE EVIDENCE)", "Use this brief to prioritize investigation and formulate hypotheses. Do not treat it as verified. Material claims must be checked against repository source before entering final documentation.", repository_research, f"PHASE-SPECIFIC SEMANTIC RESEARCH BRIEF FOR {phase} (NAVIGATION AID — NOT AUTHORITATIVE EVIDENCE)", "Use the prioritized files, symbols, and searches below to perform targeted source verification. Do not skip material repository inspection merely because a hypothesis is stated here.", phase_research])
+    return "\n\n".join([
+        deterministic,
+        "UPSTREAM SEMANTIC FINANCIAL RESEARCH BRIEF (PRELIMINARY EVIDENCE)",
+        "Use this brief as preliminary financial evidence for the phase. Do not treat it as a final conclusion and do not invent figures.",
+        repository_research,
+        f"PHASE-SPECIFIC SEMANTIC FINANCIAL RESEARCH BRIEF FOR {phase}",
+        "Use this preliminary evidence to focus the financial analysis. Verify quantitative claims against the supplied source data.",
+        phase_research,
+    ])
 
 
 def analyze_repository(company_name: str, phases_per_batch: int = settings.phases_per_batch, number_of_batches: Optional[int] = None, batch_mode: str = "parallel", on_phase_complete: Optional[PhaseCompleteCallback] = None, selected_phases: Optional[list[str]] = None, work_id: Optional[str] = None, provider: str = "openrouter", model: str = "openrouter/free", api_key: Optional[str] = None, run_control: Optional[RunControl] = None, objective: str = "document") -> dict:
