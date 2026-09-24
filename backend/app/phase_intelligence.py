@@ -26,6 +26,9 @@ def build_phase_intelligence(intelligence: RepositoryIntelligence, phase: str) -
         f"Latest fiscal year detected: {intelligence.latest_fiscal_year or 'not detected'}",
         f"Available XBRL taxonomies: {', '.join(intelligence.fact_taxonomies) or 'none detected'}",
         f"Available financial concepts: {intelligence.fact_count}",
+        "JSON resource structure:",
+        f"- {intelligence.json_structure.get('facts_shape', '/facts/<taxonomy>/<concept>/units/<unit>/[observations]') if intelligence.json_structure else '/facts/<taxonomy>/<concept>/units/<unit>/[observations]'}",
+        "- Structured JSON evidence should be retrieved through bounded JSON tools; the full resource is not loaded into agent context.",
         "",
         "Annual reporting periods:",
     ]
