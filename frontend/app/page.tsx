@@ -40,7 +40,7 @@ type AnalysisResult = {
   capital_cash_deployment: string;
   accounting_signals_anomalies: string;
 };
-type Failure = { analysis: string; analysis_name: string; error_type: string; error: string };
+type Failure = { phase: string; phase_name: string; error_type: string; error: string };
 type AnalysisEvent =
   | { type: "phase_completed"; phase: string; phase_name: string; raw_analysis: string; raw_path: string; run_id: string; provenance?: { model: string } }
   | { type: "analysis_completed"; company_name: string; run_id: string; completed_phases: string[]; failed_phases?: Failure[] }
@@ -166,9 +166,9 @@ export default function Home() {
     const nextActive = viewedCompletedPhase && completed.includes(viewedCompletedPhase) ? viewedCompletedPhase : status.active_phase || selected[0] || activePhase || completed[completed.length - 1] || analyses[0].id;
     setRunId(status.run_id); setRepoUrl(status.company_name); setSelectedPhases(selected);
     setCompletedPhases(completed); setActivePhase(nextActive);
-    setFailedPhases((status.failures ?? []).map((failure) => failure.phase ?? failure.phase));
+    setFailedPhases((status.failures ?? []).map((failure) => failure.phase));
     setAnalysisResult((previous) => {
-      const next = { ...(previous ?? emptyResult(status.repo_url)), company_name: status.company_name };
+      const next = { ...(previous ?? emptyResult(status.company_name)), company_name: status.company_name };
       for (const [analysis, content] of Object.entries(status.results ?? {})) { const key = analysisResultMap[analysis as Phase["id"]]; if (key) next[key] = content; }
       return next;
     });
@@ -313,7 +313,7 @@ export default function Home() {
             );
 
             const resultKey =
-              analysisResultMap[eventData.analysis as Phase["id"]];
+              analysisResultMap[eventData.phase as Phase["id"]];
 
             if (resultKey) {
               setAnalysisResult((previous) => ({
@@ -323,16 +323,16 @@ export default function Home() {
               }));
 
               setCompletedPhases((previous) =>
-                previous.includes(eventData.analysis)
+                previous.includes(eventData.phase)
                   ? previous
-                  : [...previous, eventData.analysis]
+                  : [...previous, eventData.phase]
               );
 
               setSelectedPhases((previous) =>
-                previous.filter((id) => id !== eventData.analysis)
+                previous.filter((id) => id !== eventData.phase)
               );
 
-              setActivePhase(eventData.analysis);
+              setActivePhase(eventData.phase);
             }
           } else if (eventData.type === "analysis_completed") {
             const failures = eventData.failed_phases ?? [];
@@ -343,7 +343,7 @@ export default function Home() {
             setStopping(false);
             setStopped(false);
             setFailedPhases(
-              failures.map((failure) => failure.analysis)
+              failures.map((failure) => failure.phase)
             );
 
             if (failures.length) {
