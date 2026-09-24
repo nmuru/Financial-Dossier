@@ -414,22 +414,20 @@ async def _run_agent(*, phase: str, phase_name: str, repository: Path, phase_int
     if previous_output:
         handoff = "\n\nPrevious phase output is supporting context only. Verify important claims against repository evidence.\n\n" + previous_output[:20000]
 
-    common_instructions = """You are performing an evidence-driven SDLC reverse-engineering phase.
-The financial source data has already been acquired and deterministic source intelligence has already been collected before your first turn. Treat that intelligence as the primary evidence index.
-Do not repeat repository-wide discovery or reread files merely to reconstruct information already present in the intelligence package. Use repository tools only for a specific ambiguity, missing source passage, or precision check.
-Do not invent details. Distinguish verified facts, reasonable inferences, and unknowns when evidence is incomplete.
-The repository is read-only. Do not modify it.
-Return only complete professional Markdown documentation for the requested phase. Do not describe the agent, tools, prompts, intelligence collection, or execution process.
+    common_instructions = """You are performing an evidence-driven financial analysis phase.
+The controlled financial source data has already been acquired and deterministic financial intelligence has already been collected before your first turn. Treat that intelligence and the preliminary semantic research as the primary evidence index.
+Do not repeat broad source discovery merely to reconstruct information already present in the intelligence package. Use supplied financial-source tools only for a specific ambiguity, missing data passage, or precision check.
+Do not invent financial facts or values. Distinguish verified data, reasonable analytical inference, and unknowns when evidence is incomplete.
+The supplied financial files are read-only. Do not modify them.
+Return only complete professional Markdown financial analysis for the requested phase. Do not describe the agent, tools, prompts, intelligence collection, or execution process.
 Skill resources are supplied explicitly by the runtime. Use those paths and tool identifiers instead of discovering them.
 
-
-
-INVESTIGATION BUDGET
-You have a finite investigation budget defined by the runner. Prioritize high-value evidence gathering early. As the remaining budget becomes small, stop broad exploration and transition to verification and synthesis. On the final available turn, produce the best-supported artifact possible rather than continuing investigation. Never invent missing evidence; mark it unknown or unverified."""
+FINANCIAL ANALYSIS BUDGET
+Prioritize high-value financial evidence and synthesis. When the available evidence is sufficient, stop broad exploration and produce the best-supported analysis. Never invent missing figures; state when data is unavailable or insufficient."""
 
     instructions = "\n\n".join(part for part in [common_instructions, common_agent_contract, agent_definition, resource_context, skill_metadata_context, phase_intelligence, handoff] if part)
     client = AsyncOpenAI(base_url=base_url, api_key=api_key.strip())
-    agent = Agent(name=f"SDLC {phase_name}", instructions=instructions, model=OpenAIChatCompletionsModel(model=model.strip(), openai_client=client), tools=_build_tools(phase, repository, output_run_dir))
+    agent = Agent(name=f"Financial {phase_name}", instructions=instructions, model=OpenAIChatCompletionsModel(model=model.strip(), openai_client=client), tools=_build_tools(phase, repository, output_run_dir))
     trace_id = uuid.uuid4().hex[:12]
     hooks = AgentDiagnosticsHooks(trace_id, phase)
     started = time.perf_counter()
@@ -437,7 +435,7 @@ You have a finite investigation budget defined by the runner. Prioritize high-va
     try:
         if run_control and run_control.is_cancelled():
             raise RunCancelled("Analysis stopped by the user.")
-        agent_task = asyncio.create_task(Runner.run(agent, "Analyze the repository and produce the requested phase documentation.", hooks=hooks, max_turns=settings.phase_agent_max_turns))
+        agent_task = asyncio.create_task(Runner.run(agent, "Analyze the supplied financial evidence and produce the requested financial phase analysis.", hooks=hooks, max_turns=settings.phase_agent_max_turns))
         if run_control is None:
             result = await agent_task
         else:
