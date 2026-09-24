@@ -3,16 +3,10 @@
 import asyncio
 import json
 import logging
-import shutil
-import subprocess
 import time
 import uuid
 from pathlib import Path
 from typing import Any, Optional
-from urllib.error import HTTPError, URLError
-from urllib.parse import urlparse
-from urllib.request import Request, urlopen
-import os
 
 from agents import Agent, Runner, RunHooks, function_tool, set_tracing_export_api_key
 from agents.models.openai_chatcompletions import OpenAIChatCompletionsModel
@@ -45,164 +39,6 @@ class AgentRunnerError(RuntimeError):
     """Raised when a repository-analysis phase cannot be completed."""
 
 
-# def github_repository_size_bytes(repo_url: str) -> int | None:
-#     """Return GitHub's repository-size estimate in bytes for a public GitHub URL."""
-#     parsed = urlparse(repo_url.strip())
-#     if parsed.scheme not in {"http", "https"} or parsed.hostname not in {"github.com", "www.github.com"}:
-#         return None
-#     parts = [part for part in parsed.path.strip("/").split("/") if part]
-#     if len(parts) < 2:
-#         return None
-#     owner, repository = parts[0], parts[1]
-#     if repository.endswith(".git"):
-#         repository = repository[:-4]
-#     if not owner or not repository:
-#         return None
-#     api_url = f"https://api.github.com/repos/{owner}/{repository}"
-#     request = Request(api_url, headers={"Accept": "application/vnd.github+json", "User-Agent": "sdlc-reverse-engineer"})
-#     try:
-#         with urlopen(request, timeout=10) as response:
-#             payload = json.loads(response.read().decode("utf-8"))
-#     except HTTPError as exc:
-#         if exc.code == 404:
-#             raise AgentRunnerError("Could not inspect the GitHub repository before cloning. The repository may not exist or may not be publicly accessible.") from exc
-#         raise AgentRunnerError(f"Could not inspect the GitHub repository before cloning: HTTP {exc.code}") from exc
-#     except (URLError, TimeoutError, OSError, json.JSONDecodeError) as exc:
-#         raise AgentRunnerError(f"Could not inspect the GitHub repository before cloning: {exc}") from exc
-#     size_kib = payload.get("size")
-#     if not isinstance(size_kib, int) or size_kib < 0:
-#         return None
-#     return size_kib * 1024
-
-
-def github_repository_size_bytes(repo_url: str) -> int | None:
-    """Return GitHub's repository-size estimate in bytes for a public GitHub URL."""
-    parsed = urlparse(repo_url.strip())
-    if parsed.scheme not in {"http", "https"} or parsed.hostname not in {"github.com", "www.github.com"}:
-        return None
-
-    parts = [part for part in parsed.path.strip("/").split("/") if part]
-    if len(parts) < 2:
-        return None
-
-    owner, repository = parts[0], parts[1]
-
-    if repository.endswith(".git"):
-        repository = repository[:-4]
-
-    if not owner or not repository:
-        return None
-
-    api_url = f"https://api.github.com/repos/{owner}/{repository}"
-
-    logger.warning(
-    "GitHub repository inspection request: repo=%s url=%s",
-    f"{owner}/{repository}",
-    api_url,)
-
-    github_token = os.getenv("GITHUB_TOKEN")
-
-    headers = {
-        "Accept": "application/vnd.github+json",
-        "User-Agent": "sdlc-reverse-engineer",
-    }
-    
-    if github_token:
-        headers["Authorization"] = f"Bearer {github_token}"
-    
-    request = Request(api_url, headers=headers)
-    
-    # request = Request(
-    #     api_url,
-    #     headers={
-    #         "Accept": "application/vnd.github+json",
-    #         "User-Agent": "sdlc-reverse-engineer",
-    #     },
-    # )
-
-    try:
-        with urlopen(request, timeout=10) as response:
-            payload = json.loads(response.read().decode("utf-8"))
-
-    except HTTPError as exc:
-        # Capture the actual response from GitHub so we can see why
-        # the API returned 4xx/5xx instead of only "HTTP 403".
-        try:
-            response_body = exc.read().decode("utf-8", errors="replace")
-        except Exception:
-            response_body = "<unable to read GitHub error response>"
-
-        response_headers = dict(exc.headers) if exc.headers else {}
-
-        logger.error(
-            "GitHub repository inspection failed: "
-            "url=%s status=%s headers=%s body=%s",
-            api_url,
-            exc.code,
-            response_headers,
-            response_body,
-        )
-
-        if exc.code == 404:
-            raise AgentRunnerError(
-                "Could not inspect the GitHub repository before cloning. "
-                "The repository may not exist or may not be publicly accessible."
-            ) from exc
-
-        raise AgentRunnerError(
-            f"Could not inspect the GitHub repository before cloning: HTTP {exc.code}"
-        ) from exc
-
-    except (URLError, TimeoutError, OSError, json.JSONDecodeError) as exc:
-        logger.error(
-            "GitHub repository inspection failed: url=%s error=%s",
-            api_url,
-            exc,
-        )
-        raise AgentRunnerError(
-            f"Could not inspect the GitHub repository before cloning: {exc}"
-        ) from exc
-
-    size_kib = payload.get("size")
-
-    logger.info(
-    "GitHub repository inspection succeeded: repo=%s size_kib=%s",
-    f"{owner}/{repository}",
-    size_kib,)
-
-    if not isinstance(size_kib, int) or size_kib < 0:
-        return None
-
-    return size_kib * 1024
-
-
-
-def clone_repository(repo_url: str, workspace: Path) -> Path:
-    """Clone a repository once for the lifetime of an analysis run."""
-    repository = workspace / "target-repository"
-    if repository.exists():
-        shutil.rmtree(repository, ignore_errors=True)
-    result = subprocess.run(["git", "clone", "--depth", "1", repo_url.strip(), str(repository)], capture_output=True, text=True, encoding="utf-8", errors="replace", check=False)
-    if result.returncode != 0:
-        raise AgentRunnerError("Could not clone the target repository: " + result.stderr.strip()[:2000])
-    return repository
-
-
-def repository_size_bytes(repository: Path) -> int:
-    """Return the on-disk size of the cloned repository, including Git metadata."""
-    total = 0
-    try:
-        for path in repository.rglob("*"):
-            if path.is_file():
-                try:
-                    total += path.stat().st_size
-                except OSError:
-                    continue
-    except OSError as exc:
-        raise AgentRunnerError(f"Could not measure cloned repository size: {exc}") from exc
-    return total
-
-
 def _read_common_agent_contract() -> str:
     if COMMON_AGENT_SOURCE.is_file():
         return COMMON_AGENT_SOURCE.read_text(encoding="utf-8", errors="replace")
@@ -218,12 +54,47 @@ def _read_agent_definition(phase: str) -> str:
     return ""
 
 
-def _read_skill(phase: str) -> str:
-    """Read the phase skill methodology from the runtime-owned skills directory."""
-    candidate = SKILLS_SOURCE / phase / "SKILL.md"
-    if candidate.is_file():
-        return candidate.read_text(encoding="utf-8", errors="replace")
+def _extract_skill_frontmatter(content: str) -> str:
+    """Return only the YAML frontmatter from a skill Markdown file."""
+    lines = content.splitlines()
+    if not lines or lines[0].strip() != "---":
+        return ""
+    for index in range(1, len(lines)):
+        if lines[index].strip() == "---":
+            return "\n".join(lines[: index + 1])
     return ""
+
+
+def _discover_skill_metadata(phase: str) -> list[dict[str, str]]:
+    """Discover skills by filename convention and load only their YAML frontmatter."""
+    skill_dir = SKILLS_SOURCE / phase
+    if not skill_dir.is_dir():
+        return []
+
+    candidates = sorted(
+        path for path in skill_dir.iterdir()
+        if path.is_file()
+        and path.suffix.lower() == ".md"
+        and (path.name.upper().startswith("SKILL_") or path.name.upper().endswith("_SKILL.MD"))
+    )
+
+    skills: list[dict[str, str]] = []
+    for path in candidates:
+        frontmatter = _extract_skill_frontmatter(path.read_text(encoding="utf-8", errors="replace"))
+        if not frontmatter:
+            logger.warning("Skill file has no YAML frontmatter: %s", path)
+            continue
+        skills.append({"file": path.name, "metadata": frontmatter})
+    return skills
+
+
+def _format_skill_metadata(skills: list[dict[str, str]]) -> str:
+    if not skills:
+        return "SKILL INVENTORY\nNo convention-matching skills were discovered for this phase."
+    lines = ["SKILL INVENTORY", "Only YAML frontmatter is loaded into the agent context. Skill Markdown bodies are not loaded automatically."]
+    for skill in skills:
+        lines.append(f"\nfile: {skill['file']}\n{skill['metadata']}")
+    return "\n".join(lines)
 
 
 def _resolve_skill_resources(phase: str, output_run_dir: Path) -> dict[str, Any]:
@@ -231,7 +102,7 @@ def _resolve_skill_resources(phase: str, output_run_dir: Path) -> dict[str, Any]
     skill_dir = (SKILLS_SOURCE / phase).resolve()
     resources: dict[str, Any] = {
         "root": str(skill_dir),
-        "skill": "SKILL.md",
+        "skill": "dynamic-skill-discovery",
         "artifacts": {},
         "tools": {
             "repository": ["list_files","glob","grep", "read_file", "search_repository"],
@@ -535,7 +406,8 @@ async def _run_agent(*, phase: str, phase_name: str, repository: Path, phase_int
 
     common_agent_contract = _read_common_agent_contract()
     agent_definition = _read_agent_definition(phase)
-    skill = _read_skill(phase)
+    skill_metadata = _discover_skill_metadata(phase)
+    skill_metadata_context = _format_skill_metadata(skill_metadata)
     skill_resources = _resolve_skill_resources(phase, output_run_dir)
     resource_context = _format_skill_resources(skill_resources)
     handoff = ""
@@ -555,13 +427,13 @@ Skill resources are supplied explicitly by the runtime. Use those paths and tool
 INVESTIGATION BUDGET
 You have a finite investigation budget defined by the runner. Prioritize high-value evidence gathering early. As the remaining budget becomes small, stop broad exploration and transition to verification and synthesis. On the final available turn, produce the best-supported artifact possible rather than continuing investigation. Never invent missing evidence; mark it unknown or unverified."""
 
-    instructions = "\n\n".join(part for part in [common_instructions, common_agent_contract, agent_definition, resource_context, f"Phase methodology:\n{skill}" if skill else "", phase_intelligence, handoff] if part)
+    instructions = "\n\n".join(part for part in [common_instructions, common_agent_contract, agent_definition, resource_context, skill_metadata_context, phase_intelligence, handoff] if part)
     client = AsyncOpenAI(base_url=base_url, api_key=api_key.strip())
     agent = Agent(name=f"SDLC {phase_name}", instructions=instructions, model=OpenAIChatCompletionsModel(model=model.strip(), openai_client=client), tools=_build_tools(phase, repository, output_run_dir))
     trace_id = uuid.uuid4().hex[:12]
     hooks = AgentDiagnosticsHooks(trace_id, phase)
     started = time.perf_counter()
-    logger.warning("AGENT_DIAG start trace_id=%s phase=%s model=%s provider=%s repository=%s intelligence_chars=%d common_agent_contract_chars=%d agent_definition_chars=%d skill_chars=%d skill_resources=%s max_turns=%d", trace_id, phase, model, provider_name, repository, len(phase_intelligence), len(common_agent_contract), len(agent_definition), len(skill), json.dumps(skill_resources, sort_keys=True), settings.phase_agent_max_turns)
+    logger.warning("AGENT_DIAG start trace_id=%s phase=%s model=%s provider=%s repository=%s intelligence_chars=%d common_agent_contract_chars=%d agent_definition_chars=%d skill_chars=%d skill_resources=%s max_turns=%d", trace_id, phase, model, provider_name, repository, len(phase_intelligence), len(common_agent_contract), len(agent_definition), len(skill_metadata_context), json.dumps(skill_resources, sort_keys=True), settings.phase_agent_max_turns)
     try:
         if run_control and run_control.is_cancelled():
             raise RunCancelled("Analysis stopped by the user.")
