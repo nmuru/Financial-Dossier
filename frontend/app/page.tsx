@@ -34,33 +34,34 @@ function MermaidDiagram({ chart }: { chart: string }) {
 
 type Phase = { id: string; label: string; shortLabel: string };
 type AnalysisResult = {
-  repo_url: string; business_purpose: string; scope: string; business_requirements: string; features: string;
-  software_requirements: string; technology_architecture: string; design_pattern: string;
-  high_level_design: string; low_level_design: string; implementation_detail: string;
-  testing_harness: string; future_directions: string;
+  company_name: string;
+  revenue_earnings_engine: string;
+  financial_resilience: string;
+  capital_cash_deployment: string;
+  accounting_signals_anomalies: string;
 };
 type Failure = { analysis: string; analysis_name: string; error_type: string; error: string };
 type AnalysisEvent =
-  | { type: "analysis_completed"; analysis: string; analysis_name: string; raw_analysis: string; raw_path: string; run_id: string; provenance?: { model: string } }
-  | { type: "analysis_completed"; repo_url: string; run_id: string; completed_analyses: string[]; failed_analyses?: Failure[] }
-  | { type: "analysis_cancelled"; repo_url: string; run_id: string; completed_analyses: string[]; failed_analyses?: Failure[] }
-  | { type: "analysis_failed"; repo_url: string; run_id?: string; error: string };
-type RunStatus = { run_id: string; status: string; repo_url: string; selected_analyses: string[]; completed_analyses: string[]; failures: Failure[]; active_analysis: string | null; results: Record<string, string> };
+  | { type: "phase_completed"; phase: string; phase_name: string; raw_analysis: string; raw_path: string; run_id: string; provenance?: { model: string } }
+  | { type: "analysis_completed"; company_name: string; run_id: string; completed_phases: string[]; failed_phases?: Failure[] }
+  | { type: "analysis_cancelled"; company_name: string; run_id: string; completed_phases: string[]; failed_phases?: Failure[] }
+  | { type: "analysis_failed"; company_name: string; run_id?: string; error: string };
+type RunStatus = { run_id: string; status: string; company_name: string; selected_phases: string[]; completed_phases: string[]; failures: Failure[]; active_phase: string | null; results: Record<string, string> };
 type StoredWorkspace = { runId: string; repoUrl: string; selectedPhases: string[]; completedPhases: string[]; activePhase: string; status: string; provenance: { model: string } | null; mode: "parallel" | "sequence"; objective: "document" | "understand" };
 
 const analyses: Phase[] = [
-  { id: "business-purpose", label: "Revenue & Earnings Engine", shortLabel: "Earnings Engine" },
-  { id: "scope", label: "Financial Resilience", shortLabel: "Resilience" },
-  { id: "business-requirements", label: "Capital & Cash Deployment", shortLabel: "Capital & Cash" },
-  { id: "features", label: "Accounting Signals & Anomalies", shortLabel: "Signals" },
+  { id: "revenue-earnings-engine", label: "Revenue & Earnings Engine", shortLabel: "Earnings Engine" },
+  { id: "financial-resilience", label: "Financial Resilience", shortLabel: "Resilience" },
+  { id: "capital-cash-deployment", label: "Capital & Cash Deployment", shortLabel: "Capital & Cash" },
+  { id: "accounting-signals-anomalies", label: "Accounting Signals & Anomalies", shortLabel: "Signals" },
 ];
 
-const defaultSelectedPhases = ["business-purpose", "scope", "business-requirements", "features"];
+const defaultSelectedPhases = analyses.map((analysis) => analysis.id);
 const analysisResultMap: Record<Phase["id"], keyof AnalysisResult> = {
-  "business-purpose": "business_purpose", scope: "scope", "business-requirements": "business_requirements", features: "features",
-  "software-requirements": "software_requirements", "technology-architecture": "technology_architecture",
-  "design-pattern": "design_pattern", "high-level-design": "high_level_design", "low-level-design": "low_level_design",
-  "implementation-detail": "implementation_detail", "testing-harness": "testing_harness", "future-directions": "future_directions",
+  "revenue-earnings-engine": "revenue_earnings_engine",
+  "financial-resilience": "financial_resilience",
+  "capital-cash-deployment": "capital_cash_deployment",
+  "accounting-signals-anomalies": "accounting_signals_anomalies",
 };
 
 // const API_BASE_URL = "http://localhost:8000";
@@ -74,8 +75,8 @@ const providers = [
 
 const STORAGE_KEY = "reverse-engineer-sdlc:v1-workspace";
 
-function emptyResult(repoUrl = ""): AnalysisResult {
-  return { repo_url: repoUrl, business_purpose: "", scope: "", business_requirements: "", features: "", software_requirements: "", technology_architecture: "", design_pattern: "", high_level_design: "", low_level_design: "", implementation_detail: "", testing_harness: "", future_directions: "" };
+function emptyResult(companyName = ""): AnalysisResult {
+  return { company_name: companyName, revenue_earnings_engine: "", financial_resilience: "", capital_cash_deployment: "", accounting_signals_anomalies: "" };
 }
 function makeRunId() { return (typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`).replace(/[^a-zA-Z0-9]/g, ""); }
 
@@ -91,7 +92,7 @@ export default function Home() {
   const [analysisStarted, setAnalysisStarted] = useState(false);
   const [analysisComplete, setAnalysisComplete] = useState(false);
   const [runId, setRunId] = useState<string | null>(null);
-  const [activePhase, setActivePhase] = useState("business-purpose");
+  const [activePhase, setActivePhase] = useState("revenue-earnings-engine");
   const [completedPhases, setCompletedPhases] = useState<string[]>([]);
   const [completionMessages, setCompletionMessages] = useState<string[]>([]);
   const [selectedPhases, setSelectedPhases] = useState<string[]>(defaultSelectedPhases);
@@ -157,17 +158,17 @@ export default function Home() {
   }, [analysisStarted, isDemo, runId, repoUrl, selectedPhases, completedPhases, activePhase, stopped, analysisComplete, stopping, provenance, mode, objective]);
 
   function applyStatus(status: RunStatus) {
-    const backendCompleted = status.completed_analyses ?? [];
+    const backendCompleted = status.completed_phases ?? [];
     const completed = Array.from(new Set([...completedPhases, ...backendCompleted]));
-    const backendSelected = status.selected_analyses?.length ? status.selected_analyses : defaultSelectedPhases;
+    const backendSelected = status.selected_phases?.length ? status.selected_phases : defaultSelectedPhases;
     const selected = backendSelected.filter((analysis) => !completed.includes(analysis));
     const viewedCompletedPhase = viewedCompletedPhaseRef.current;
-    const nextActive = viewedCompletedPhase && completed.includes(viewedCompletedPhase) ? viewedCompletedPhase : status.active_analysis || selected[0] || activePhase || completed[completed.length - 1] || analyses[0].id;
-    setRunId(status.run_id); setRepoUrl(status.repo_url); setSelectedPhases(selected);
+    const nextActive = viewedCompletedPhase && completed.includes(viewedCompletedPhase) ? viewedCompletedPhase : status.active_phase || selected[0] || activePhase || completed[completed.length - 1] || analyses[0].id;
+    setRunId(status.run_id); setRepoUrl(status.company_name); setSelectedPhases(selected);
     setCompletedPhases(completed); setActivePhase(nextActive);
-    setFailedPhases((status.failures ?? []).map((failure) => failure.analysis));
+    setFailedPhases((status.failures ?? []).map((failure) => failure.phase ?? failure.phase));
     setAnalysisResult((previous) => {
-      const next = { ...(previous ?? emptyResult(status.repo_url)), repo_url: status.repo_url };
+      const next = { ...(previous ?? emptyResult(status.repo_url)), company_name: status.company_name };
       for (const [analysis, content] of Object.entries(status.results ?? {})) { const key = analysisResultMap[analysis as Phase["id"]]; if (key) next[key] = content; }
       return next;
     });
@@ -296,7 +297,7 @@ export default function Home() {
             continue;
           }
 
-          if (eventData.type === "analysis_completed") {
+          if (eventData.type === "phase_completed") {
             setRunId(eventData.run_id);
 
             setProvenance(
@@ -306,9 +307,9 @@ export default function Home() {
             );
 
             setCompletionMessages((previous) =>
-              previous.includes(eventData.analysis_name)
+              previous.includes(eventData.phase_name)
                 ? previous
-                : [...previous, `${eventData.analysis_name} analysis completed`]
+                : [...previous, `${eventData.phase_name} analysis completed`]
             );
 
             const resultKey =
@@ -317,7 +318,7 @@ export default function Home() {
             if (resultKey) {
               setAnalysisResult((previous) => ({
                 ...(previous ?? emptyResult(repoUrl)),
-                repo_url: repoUrl,
+                company_name: repoUrl,
                 [resultKey]: eventData.raw_analysis,
               }));
 
@@ -334,7 +335,7 @@ export default function Home() {
               setActivePhase(eventData.analysis);
             }
           } else if (eventData.type === "analysis_completed") {
-            const failures = eventData.failed_analyses ?? [];
+            const failures = eventData.failed_phases ?? [];
 
             setRunId(eventData.run_id);
             setAnalysisComplete(true);
@@ -358,7 +359,7 @@ export default function Home() {
             setLoading(false);
             setStopping(false);
             setStopped(true);
-            setCompletedPhases(eventData.completed_analyses ?? []);
+            setCompletedPhases(eventData.completed_phases ?? []);
             setFailedPhases(
               (eventData.failed_analyses ?? []).map(
                 (failure) => failure.analysis
@@ -367,7 +368,7 @@ export default function Home() {
             setSelectedPhases((previous) =>
               previous.filter(
                 (id) =>
-                  !(eventData.completed_analyses ?? []).includes(id)
+                  !(eventData.completed_phases ?? []).includes(id)
               )
             );
           } else if (eventData.type === "analysis_failed") {
