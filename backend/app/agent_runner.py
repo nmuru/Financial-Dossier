@@ -144,7 +144,7 @@ def _format_skill_resources(resources: dict[str, Any]) -> str:
     lines.extend([
         "Runtime skill resources are relative to the supplied skill resource root; use read_resource with the supplied relative path.",
         "Use list_resources when you need to discover the complete runtime resource inventory.",
-        "Use repository read_file/search/list tools only for the target repository.",
+        "Use repository read_file/search/list tools for normal document resources in the workspace. JSON resources are not directly readable; use structured_json tools for bounded retrieval.",
         "Use output-content tools only for workflow artifacts from the current analysis run.",
         "Do not construct host filesystem paths or use repository tools to access runtime resources.",
     ])
@@ -645,7 +645,7 @@ async def _run_agent(*, phase: str, phase_name: str, repository: Path, phase_int
 
     common_instructions = """You are performing an evidence-driven financial analysis phase.
 The controlled financial source data has already been acquired and deterministic financial intelligence has already been collected before your first turn. Treat that intelligence and the preliminary semantic research as the primary evidence index.
-Do not repeat broad source discovery merely to reconstruct information already present in the intelligence package. Use supplied financial-source tools only for a specific ambiguity, missing data passage, or precision check.
+Do not repeat broad source discovery merely to reconstruct information already present in the intelligence package. Use supplied financial-source tools only for a specific ambiguity, missing data passage, or precision check. For JSON evidence, use inspect_json_structure/search_json/read_json_value/query_json rather than read_file; these tools are bounded and retrieve only the evidence slice needed for the analysis.
 Do not invent financial facts or values. Distinguish verified data, reasonable analytical inference, and unknowns when evidence is incomplete.
 The supplied financial files are read-only. Do not modify them.
 Return only complete professional Markdown financial analysis for the requested phase. Do not describe the agent, tools, prompts, intelligence collection, or execution process.
