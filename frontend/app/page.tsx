@@ -234,7 +234,7 @@ export default function Home() {
         },
         body: JSON.stringify({
           company_name: repoUrl,
-          selected_analyses: analysesToRun,
+          selected_phases: analysesToRun,
           work_id: nextRunId,
           provider,
           model,
