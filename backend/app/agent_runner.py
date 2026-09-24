@@ -254,7 +254,8 @@ def _build_tools(phase: str, repository: Path, output_run_dir: Path):
         if not candidate.is_file():
             return "Runtime resource does not exist or is not a regular file."
         try:
-            return candidate.read_text(encoding="utf-8", errors="replace")[:max_chars]
+            bounded_chars = max(1, min(int(max_chars), 30_000))
+            return candidate.read_text(encoding="utf-8", errors="replace")[:bounded_chars]
         except OSError as exc:
             return f"Could not read runtime resource: {exc}"
 
