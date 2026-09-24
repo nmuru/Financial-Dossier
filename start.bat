@@ -1,7 +1,7 @@
 @echo off
 
-set "BACKEND=C:\ReverseEngineer-SDLC-v2\ReverseEngineer-SDLC\SDLC-Reverse-Engineer\backend"
-set "FRONTEND=C:\ReverseEngineer-SDLC-v2\ReverseEngineer-SDLC\SDLC-Reverse-Engineer\frontend"
+set "BACKEND=C:\Financial-Dossier\backend"
+set "FRONTEND=C:\Financial-Dossier\frontend"
 
 set "DEBUG_AGENT=true"
 set "PATH=C:\Users\n_mur\AppData\Roaming\npm;%PATH%"
