@@ -287,13 +287,14 @@ def _build_tools(phase: str, repository: Path, output_run_dir: Path):
         if not target.is_file():
             return "File does not exist or is not a regular file."
 
-        # Never allow a model to turn the generic document tool into a whole-JSON
-        # context injection. JSON resources have their own bounded query interface.
-        if target.suffix.lower() == ".json":
+        # Small JSON documents may still be read directly. Larger structured
+        # resources must use the bounded JSON query interface.
+        hard_limit = 30_000
+        if target.suffix.lower() == ".json" and target.stat().st_size > hard_limit:
             return (
-                "Direct read of JSON resources is restricted. "
-                "Use inspect_json_structure, search_json, read_json_value, or "
-                "query_json to retrieve bounded structured evidence."
+                f"Direct read of this JSON resource is restricted because it is "
+                f"{target.stat().st_size} bytes. Use inspect_json_structure, "
+                "search_json, read_json_value, or query_json to retrieve bounded evidence."
             )
 
         hard_limit = 30_000
