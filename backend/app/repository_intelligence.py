@@ -32,6 +32,7 @@ class RepositoryIntelligence:
     annual_periods: list[dict[str, Any]]
     latest_fiscal_year: int | None
     earliest_fiscal_year: int | None
+    json_structure: dict[str, Any] | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -101,6 +102,15 @@ def collect_repository_intelligence(repository: Path) -> RepositoryIntelligence:
     )
     annual_periods = _annual_periods(facts)
     fiscal_years = sorted({int(item["fiscal_year"]) for item in annual_periods})
+    json_structure = {
+        "format": "SEC Company Facts JSON",
+        "root_keys": sorted(str(key) for key in payload.keys()),
+        "facts_path": "/facts",
+        "facts_shape": "/facts/<taxonomy>/<concept>/units/<unit>/[observations]",
+        "taxonomies": fact_taxonomies,
+        "concept_count": len(concept_names),
+        "observation_access": "Use bounded JSON tools; do not load the entire resource into agent context.",
+    }
 
     return RepositoryIntelligence(
         schema_version="financial-0.1",
@@ -116,4 +126,5 @@ def collect_repository_intelligence(repository: Path) -> RepositoryIntelligence:
         annual_periods=annual_periods,
         latest_fiscal_year=max(fiscal_years) if fiscal_years else None,
         earliest_fiscal_year=min(fiscal_years) if fiscal_years else None,
+        json_structure=json_structure,
     )
