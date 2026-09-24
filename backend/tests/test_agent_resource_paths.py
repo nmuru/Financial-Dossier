@@ -58,3 +58,35 @@ def test_format_skill_resources_exposes_paths_not_content():
     assert "output-content/run-123" in context
     assert "list_previous_phase_outputs" in context
     assert "template" not in context.lower().split("OUTPUT_TEMPLATE.md", 1)[-1]
+
+
+def test_discover_skill_metadata_supports_both_filename_conventions(tmp_path, monkeypatch):
+    project_root = tmp_path / "project"
+    skill_dir = project_root / ".agents" / "skills" / "revenue-earnings-engine"
+    skill_dir.mkdir(parents=True)
+
+    (skill_dir / "revenue_analysis_SKILL.md").write_text(
+        "---\nname: revenue-analysis\ndescription: Revenue analysis\n---\n\nFull skill body that must not be loaded.",
+        encoding="utf-8",
+    )
+    (skill_dir / "SKILL_margin_analysis.md").write_text(
+        "---\nname: margin-analysis\ndescription: Margin analysis\n---\n\nAnother full skill body.",
+        encoding="utf-8",
+    )
+    (skill_dir / "notes.md").write_text("Not a skill.", encoding="utf-8")
+
+    monkeypatch.setattr("app.agent_runner.SKILLS_SOURCE", project_root / ".agents" / "skills")
+
+    from app.agent_runner import _discover_skill_metadata, _format_skill_metadata
+
+    skills = _discover_skill_metadata("revenue-earnings-engine")
+    context = _format_skill_metadata(skills)
+
+    assert [item["file"] for item in skills] == [
+        "SKILL_margin_analysis.md",
+        "revenue_analysis_SKILL.md",
+    ]
+    assert "name: revenue-analysis" in context
+    assert "name: margin-analysis" in context
+    assert "Full skill body" not in context
+    assert "Another full skill body" not in context
