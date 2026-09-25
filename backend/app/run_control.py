@@ -22,7 +22,7 @@ class RunControl:
         self.cancel_event = threading.Event()
         self._lock = threading.Lock()
         self.status = "running"
-        self.repo_url = ""
+        self.company_name = ""
         self.selected_phases: list[str] = []
         self.completed_phases: list[str] = []
         self.failures: list[dict[str, Any]] = []
@@ -31,18 +31,19 @@ class RunControl:
         self.completed_at: str | None = None
         self.last_heartbeat = time.monotonic()
 
-    def initialize(self, *, repo_url: str, selected_phases: list[str]) -> None:
+    def initialize(self, *, company_name: str, selected_phases: list[str]) -> None:
         previous_completed: list[str] = []
         try:
             if self.state_path.is_file():
                 previous = json.loads(self.state_path.read_text(encoding="utf-8"))
-                if previous.get("repo_url") == repo_url and previous.get("status") in {"completed", "failed", "cancelled"}:
+                previous_company = previous.get("company_name") or previous.get("repo_url")
+                if previous_company == company_name and previous.get("status") in {"completed", "failed", "cancelled"}:
                     previous_completed = list(previous.get("completed_phases", []))
         except (OSError, json.JSONDecodeError, TypeError):
             previous_completed = []
 
         self.status = "running"
-        self.repo_url = repo_url
+        self.company_name = company_name
         self.selected_phases = list(selected_phases)
         self.completed_phases = previous_completed
         self.failures = []
@@ -109,7 +110,7 @@ class RunControl:
             return {
                 "run_id": self.run_id,
                 "status": self.status,
-                "repo_url": self.repo_url,
+                "company_name": self.company_name,
                 "selected_phases": list(self.selected_phases),
                 "completed_phases": list(self.completed_phases),
                 "failures": list(self.failures),
