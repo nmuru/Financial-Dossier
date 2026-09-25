@@ -248,7 +248,7 @@ def analyze(request: AnalyzeRequest) -> StreamingResponse:
         output_run_dir = _output_root() / resolved_run_id
         output_run_dir.mkdir(parents=True, exist_ok=True)
         control = RunControl(resolved_run_id, output_run_dir / "run-state.json")
-        control.initialize(repo_url=company_name, selected_phases=request.selected_phases)
+        control.initialize(company_name=company_name, selected_phases=request.selected_phases)
         with _run_controls_lock:
             _run_controls[resolved_run_id] = control
     except HTTPException:
@@ -270,13 +270,13 @@ def analyze(request: AnalyzeRequest) -> StreamingResponse:
                 if memory_guard.triggered.is_set():
                     control.finish("failed", MemoryCapacityError.user_message)
                     logger.warning("Analysis stopped by memory capacity guard work_id=%s", resolved_run_id)
-                    event_queue.put({"type": "analysis_failed", "repo_url": company_name, "run_id": resolved_run_id, "error": MemoryCapacityError.user_message})
+                    event_queue.put({"type": "analysis_failed", "company_name": company_name, "run_id": resolved_run_id, "error": MemoryCapacityError.user_message})
                 else:
                     control.finish("cancelled")
                     event_queue.put({"type": "analysis_cancelled", "repo_url": company_name, "run_id": resolved_run_id, "completed_phases": list(results["results"].keys()), "failed_phases": results.get("failures", [])})
             else:
                 control.finish("completed")
-                event_queue.put({"type": "analysis_completed", "repo_url": company_name, "run_id": results["run_id"], "completed_phases": list(results["results"].keys()), "failed_phases": results.get("failures", [])})
+                event_queue.put({"type": "analysis_completed", "company_name": company_name, "run_id": results["run_id"], "completed_phases": list(results["results"].keys()), "failed_phases": results.get("failures", [])})
         except RunCancelled:
             if memory_guard.triggered.is_set():
                 control.finish("failed", MemoryCapacityError.user_message)
