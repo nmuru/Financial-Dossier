@@ -17,6 +17,7 @@ from .analyzer import analyze_repository
 from .config import settings
 from .memory_guard import MemoryCapacityError, MemoryCapacityGuard, capacity_diagnostics
 from .exporter import create_download_package
+from .edgar_financials import EdgarFinancialsError, collect_financial_statements
 from .run_control import RunCancelled, RunControl, load_persisted_run
 from .schemas import AnalyzeRequest
 
@@ -114,6 +115,15 @@ def _read_phase_result(run_id: str, phase: str) -> str | None:
 
 
 Thread(target=_ui_heartbeat_watchdog, daemon=True).start()
+
+
+@app.get("/api/financials/{identifier}")
+def financial_statements(identifier: str, periods: int = 5, view: str = "standard") -> dict[str, Any]:
+    """Return deterministic SEC financial statements collected through EdgarTools."""
+    try:
+        return collect_financial_statements(identifier, historical_periods=periods, view=view)
+    except EdgarFinancialsError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @app.get("/health")
