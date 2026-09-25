@@ -283,17 +283,14 @@ def collect_financial_statements(
                 "ticker": _json_value(getattr(company, "ticker", None)),
             },
             "annual": {
-                "income_statement": _select_recent_annual_rows(
-                    _statement_records(financials.income_statement(view=view), view),
-                    historical_periods,
+                "income_statement": _statement_records(
+                    financials.income_statement(view=view), view
                 ),
-                "balance_sheet": _select_recent_annual_rows(
-                    _statement_records(financials.balance_sheet(view=view), view),
-                    historical_periods,
+                "balance_sheet": _statement_records(
+                    financials.balance_sheet(view=view), view
                 ),
-                "cash_flow_statement": _select_recent_annual_rows(
-                    _statement_records(financials.cash_flow_statement(view=view), view),
-                    historical_periods,
+                "cash_flow_statement": _statement_records(
+                    financials.cash_flow_statement(view=view), view
                 ),
             },
             "historical": None,
