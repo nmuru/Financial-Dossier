@@ -14,7 +14,7 @@ class Settings(BaseSettings):
     resource_diagnostics_enabled: bool = True
     resource_diagnostics_interval_seconds: float = 2.0
     resource_diagnostics_dir: str = "resource-diagnostics"
-    phase_agent_max_turns: int = 15
+    phase_agent_max_turns: int = 3
     max_repository_size_mb: int = 500
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
