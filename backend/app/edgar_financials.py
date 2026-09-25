@@ -41,11 +41,14 @@ def _json_value(value: Any) -> Any:
     return str(value)
 
 
-def _statement_records(statement: Any, view: str = "standard") -> dict[str, Any]:
+def _statement_records(statement: Any, view: str | None = "standard") -> dict[str, Any]:
     if statement is None:
         return {"available": False, "rows": [], "columns": []}
 
-    dataframe = statement.to_dataframe(view=view)
+    if view is None:
+        dataframe = statement.to_dataframe()
+    else:
+        dataframe = statement.to_dataframe(view=view)
     dataframe = dataframe.reset_index(drop=True)
 
     rows: list[dict[str, Any]] = []
@@ -302,15 +305,15 @@ def collect_financial_statements(
                 "periods_requested": historical_periods,
                 "income_statement": _statement_records(
                     facts.income_statement(periods=historical_periods, annual=True),
-                    view,
+                    None,
                 ),
                 "balance_sheet": _statement_records(
                     facts.balance_sheet(periods=historical_periods, annual=True),
-                    view,
+                    None,
                 ),
                 "cash_flow_statement": _statement_records(
                     facts.cash_flow(periods=historical_periods, annual=True),
-                    view,
+                    None,
                 ),
             }
 
