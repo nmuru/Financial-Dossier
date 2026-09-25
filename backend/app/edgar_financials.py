@@ -64,6 +64,7 @@ def _statement_records(statement: Any, view: str | None = "standard") -> dict[st
         "view": view,
         "columns": [str(column) for column in dataframe.columns],
         "rows": rows,
+        "table": dataframe.to_string(index=False),
     }
 
 
