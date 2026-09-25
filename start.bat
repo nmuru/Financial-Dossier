@@ -5,6 +5,8 @@ set "FRONTEND=C:\Financial-Dossier\Financial-Analysis\frontend"
 
 set "DEBUG_AGENT=true"
 
+set EDGAR_IDENTITY=nm nmurugs@gmail.com
+
 if not defined EDGAR_IDENTITY (
     echo WARNING: EDGAR_IDENTITY is not set. SEC/EdgarTools financial calls will fail.
     echo Set it before running this script, for example:

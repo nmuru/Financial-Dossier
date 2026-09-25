@@ -168,7 +168,7 @@ def analyze_repository(company_name: str, phases_per_batch: int = settings.phase
     results: dict[str, dict] = {}; failures: list[dict] = []
     try:
         _check_cancelled(run_control)
-            with tempfile.TemporaryDirectory(prefix="reverse-engineer-") as tmp:
+        with tempfile.TemporaryDirectory(prefix="reverse-engineer-") as tmp:
             workspace = Path(tmp); diagnostics.run_event("workspace_created", workspace=str(workspace)); repository = download_company_facts(company_name, workspace, run_control=run_control); _check_cancelled(run_control)
             # size_bytes = repository_size_bytes(repository)
             # if size_bytes > max_bytes: raise _repository_size_limit_error()
