@@ -234,34 +234,6 @@ def _build_tools(phase: str, repository: Path, output_run_dir: Path):
         except OSError as exc:
             return f"Unable to read {filename}: {exc}"
     @function_tool
-    def list_resources() -> str:
-        """List files available in the current phase's runtime resource directory."""
-        if not skill_dir.is_dir():
-            return "No runtime resources are available."
-        files = sorted(
-            path.relative_to(skill_dir).as_posix()
-            for path in skill_dir.rglob("*")
-            if path.is_file()
-        )
-        return "\n".join(files) if files else "No runtime resources are available."
-
-    @function_tool
-    def read_resource(path: str, max_chars: int = 30000) -> str:
-        """Read a file from the current phase's runtime resource directory."""
-        resource_root = skill_dir.resolve()
-        candidate = (resource_root / path).resolve()
-        if resource_root != candidate and resource_root not in candidate.parents:
-            return "Invalid resource path: access outside the current phase resource directory is not allowed."
-        if not candidate.is_file():
-            return "Runtime resource does not exist or is not a regular file."
-        try:
-            bounded_chars = max(1, min(int(max_chars), 30_000))
-            return candidate.read_text(encoding="utf-8", errors="replace")[:bounded_chars]
-        except OSError as exc:
-            return f"Could not read runtime resource: {exc}"
-
-
-    @function_tool
     def list_files(path: str = ".", max_entries: int = 300) -> str:
         """List repository files and directories recursively, without modifying anything."""
         target = safe_path(path)
