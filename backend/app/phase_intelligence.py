@@ -1,98 +1,51 @@
-"""Minimal deterministic financial phase intelligence.
-
-The smoke-test version answers one question before each financial phase:
-what company/source is being analyzed, what period is covered, and what financial
-data concepts are available. It deliberately avoids software-repository concepts.
-"""
+"""Compact deterministic financial evidence manifest for phase agents."""
 from __future__ import annotations
 
 import json
-
-from .repository_intelligence import RepositoryIntelligence, collect_repository_intelligence
-from .edgar_financials import build_financial_intelligence
+from typing import Any
 
 
-def build_phase_intelligence(intelligence: RepositoryIntelligence, phase: str, financial_intelligence: str = "") -> str:
-    years = intelligence.fiscal_years
-    if years:
-        year_text = f"{years[0]} through {years[-1]} ({len(years)} fiscal years)"
-    else:
-        year_text = "no annual fiscal-year coverage detected"
+def build_phase_intelligence(financial_intelligence: str, phase: str) -> str:
+    """Return only the metadata needed to orient an agent before tool retrieval.
 
-    lines = [
-        f"PHASE-SPECIFIC DETERMINISTIC FINANCIAL INTELLIGENCE: {phase}",
-        "",
-        f"Company: {intelligence.entity_name}",
-        f"SEC CIK: {intelligence.cik or 'not supplied'}",
-        f"Source: SEC Company Facts JSON (companyfacts.json)",
-        f"Annual 10-K coverage: {year_text}",
-        f"Latest fiscal year detected: {intelligence.latest_fiscal_year or 'not detected'}",
-        f"Available XBRL taxonomies: {', '.join(intelligence.fact_taxonomies) or 'none detected'}",
-        f"Available financial concepts: {intelligence.fact_count}",
-        "JSON resource structure:",
-        f"- {intelligence.json_structure.get('facts_shape', '/facts/<taxonomy>/<concept>/units/<unit>/[observations]') if intelligence.json_structure else '/facts/<taxonomy>/<concept>/units/<unit>/[observations]'}",
-        "- Structured JSON evidence should be retrieved through bounded JSON tools; the full resource is not loaded into agent context.",
-        "",
-        "Annual reporting periods:",
-    ]
+    Actual financial rows remain outside the LLM context and are retrieved through
+    get_financial_statements at runtime.
+    """
+    try:
+        payload: dict[str, Any] = json.loads(financial_intelligence)
+    except (TypeError, ValueError, json.JSONDecodeError):
+        return f"""FINANCIAL EVIDENCE MANIFEST: {phase}
+Source: SEC via EdgarTools
+Financial data is available through the get_financial_statements tool.
+"""
 
-    if intelligence.annual_periods:
-        for period in intelligence.annual_periods[-10:]:
-            lines.append(
-                f"- FY{period['fiscal_year']}, period end {period['period_end']}, "
-                f"forms: {', '.join(period['forms'])}"
-            )
-    else:
-        lines.append("- none detected")
+    company = payload.get("company") or {}
+    historical = payload.get("historical") or {}
+    annual = payload.get("annual") or {}
+    statements = []
+    for key, label in (
+        ("income_statement", "income statement"),
+        ("balance_sheet", "balance sheet"),
+        ("cash_flow_statement", "cash flow statement"),
+    ):
+        selected = historical.get(key) or annual.get(key) or {}
+        if selected.get("available"):
+            statements.append(label)
 
-    lines.extend(["", "Representative available financial concepts:"])
-    if intelligence.concept_names:
-        lines.extend(f"- {name}" for name in intelligence.concept_names[:80])
-    else:
-        lines.append("- none detected")
-
-    if financial_intelligence:
-        phase_key = {
-            "revenue-earnings-engine": "revenue_earnings",
-            "financial-resilience": "financial_resilience",
-            "capital-cash-deployment": "capital_cash_deployment",
-            "accounting-signals-anomalies": "accounting_signals_anomalies",
-        }.get(phase)
-        phase_payload = financial_intelligence
-        try:
-            parsed = json.loads(financial_intelligence)
-            phase_data = parsed.get("phase_data", {}).get(phase_key) if phase_key else None
-            if phase_data is not None:
-                phase_payload = json.dumps(
-                    {
-                        "source": parsed.get("source"),
-                        "identifier": parsed.get("identifier"),
-                        "company": parsed.get("company"),
-                        "phase": phase,
-                        "periods": parsed.get("historical", {}).get("periods_requested"),
-                        "data": phase_data,
-                    },
-                    ensure_ascii=False,
-                )
-        except (TypeError, ValueError, json.JSONDecodeError):
-            pass
-        lines.extend(["", "UPFRONT STRUCTURED FINANCIAL DATA (SEC via EdgarTools):", phase_payload])
-
-    lines.extend(
-        [
-            "",
-            "Smoke-test purpose:",
-            f"- Establish preliminary financial evidence for the {phase} phase before semantic research and agent analysis.",
-            "- Do not infer financial conclusions merely from concept availability.",
-        ]
-    )
-    return "\n".join(lines)
+    period_count = historical.get("periods_requested") or 3
+    return "\n".join([
+        f"FINANCIAL EVIDENCE MANIFEST: {phase}",
+        f"Company: {company.get('name') or 'unknown'}",
+        f"SEC CIK: {company.get('cik') or 'unknown'}",
+        f"Ticker: {company.get('ticker') or 'not supplied'}",
+        f"Source: {payload.get('source') or 'SEC via EdgarTools'}",
+        f"Annual historical periods available: {period_count}",
+        f"Available statements: {', '.join(statements) or 'none detected'}",
+        "Financial statement rows are intentionally outside the model context.",
+        "Retrieve actual values with get_financial_statements before making quantitative claims.",
+        "Use structured JSON tools only for targeted XBRL evidence not covered by the statement tool.",
+    ])
 
 
-def collect_phase_intelligence(
-    repository,
-    phase: str,
-    intelligence: RepositoryIntelligence | None = None,
-) -> tuple[RepositoryIntelligence, str]:
-    intelligence = intelligence or collect_repository_intelligence(repository)
-    return intelligence, build_phase_intelligence(intelligence, phase)
+def collect_phase_intelligence(financial_intelligence: str, phase: str) -> str:
+    return build_phase_intelligence(financial_intelligence, phase)
