@@ -8,6 +8,7 @@ stable JSON-serializable structure for later agent consumption.
 from __future__ import annotations
 
 import os
+import json
 from typing import Any
 
 from edgar import Company, set_identity
@@ -58,6 +59,23 @@ def _statement_records(statement: Any, view: str = "standard") -> dict[str, Any]
     }
 
 
+def _select_recent_annual_rows(statement_data: dict[str, Any], periods: int) -> dict[str, Any]:
+    """Return a bounded deterministic statement payload."""
+    rows = statement_data.get("rows") or []
+    max_rows = max(1, min(int(periods), 5)) * 80
+    if len(rows) <= max_rows:
+        return statement_data
+    return {**statement_data, "rows": rows[-max_rows:], "truncated": True}
+
+def build_financial_intelligence(identifier: str, *, historical_periods: int = 5, view: str = "standard") -> str:
+    """Build compact upfront financial intelligence for downstream phase agents."""
+    payload = collect_financial_statements(
+        identifier,
+        historical_periods=historical_periods,
+        view=view,
+    )
+    return json.dumps(payload, ensure_ascii=False)
+
 def collect_financial_statements(
     identifier: str,
     *,
@@ -94,14 +112,17 @@ def collect_financial_statements(
                 "ticker": _json_value(getattr(company, "ticker", None)),
             },
             "annual": {
-                "income_statement": _statement_records(
-                    financials.income_statement(view=view), view
+                "income_statement": _select_recent_annual_rows(
+                    _statement_records(financials.income_statement(view=view), view),
+                    historical_periods,
                 ),
-                "balance_sheet": _statement_records(
-                    financials.balance_sheet(view=view), view
+                "balance_sheet": _select_recent_annual_rows(
+                    _statement_records(financials.balance_sheet(view=view), view),
+                    historical_periods,
                 ),
-                "cash_flow_statement": _statement_records(
-                    financials.cash_flow_statement(view=view), view
+                "cash_flow_statement": _select_recent_annual_rows(
+                    _statement_records(financials.cash_flow_statement(view=view), view),
+                    historical_periods,
                 ),
             },
             "historical": None,
