@@ -4,6 +4,12 @@ set "BACKEND=C:\Financial-Dossier\Financial-Analysis\backend"
 set "FRONTEND=C:\Financial-Dossier\Financial-Analysis\frontend"
 
 set "DEBUG_AGENT=true"
+
+if not defined EDGAR_IDENTITY (
+    echo WARNING: EDGAR_IDENTITY is not set. SEC/EdgarTools financial calls will fail.
+    echo Set it before running this script, for example:
+    echo   set EDGAR_IDENTITY=Your Name your.email@example.com
+)
 set "PATH=C:\Users\n_mur\AppData\Roaming\npm;%PATH%"
 
 cd /d "%BACKEND%"
