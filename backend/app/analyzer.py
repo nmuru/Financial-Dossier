@@ -11,6 +11,7 @@ from .agent_runner import run_phase_agent
 from .cancellable_download import download_company_facts
 from .config import settings
 from .exporter import create_download_package
+from .edgar_financials import build_financial_intelligence
 from .phase_intelligence import build_phase_intelligence
 from .renderer import render_analysis
 from .repository_intelligence import RepositoryIntelligence, collect_repository_intelligence
@@ -170,10 +171,11 @@ def analyze_repository(company_name: str, phases_per_batch: int = settings.phase
                                 #   repository_size_bytes=size_bytes
                                   )
             intelligence: RepositoryIntelligence = collect_repository_intelligence(repository); diagnostics.run_event("repository_intelligence_collected", files_considered=intelligence.file_count); _check_cancelled(run_control)
+            financial_intelligence = build_financial_intelligence(company_name, historical_periods=5, view="standard"); diagnostics.run_event("financial_intelligence_collected", output_chars=len(financial_intelligence)); _check_cancelled(run_control)
             diagnostics.run_event("repository_research_started")
             repository_research = run_repository_research(intelligence=intelligence, repository=repository, provider=provider, model=model, api_key=api_key, run_control=run_control); _check_cancelled(run_control)
             write_research_artifact(output_run_dir / "repository-research.md", kind="repository", phase=None, content=repository_research); diagnostics.run_event("repository_research_completed", output_chars=len(repository_research), llm_requests=1)
-            deterministic_phase_packages = {key: build_phase_intelligence(intelligence, key) for key in selected_ids}
+            deterministic_phase_packages = {key: build_phase_intelligence(intelligence, key, financial_intelligence=financial_intelligence) for key in selected_ids}
             phase_research: dict[str, str] = {}; phase_research_failures: list[dict] = []
             diagnostics.run_event("phase_research_started", phase_count=len(selected_ids), expected_llm_requests=len(selected_ids), execution="sequential")
             for key in selected_ids:
