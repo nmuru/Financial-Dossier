@@ -7,9 +7,10 @@ data concepts are available. It deliberately avoids software-repository concepts
 from __future__ import annotations
 
 from .repository_intelligence import RepositoryIntelligence, collect_repository_intelligence
+from .financial_intelligence import collect_financial_intelligence
 
 
-def build_phase_intelligence(intelligence: RepositoryIntelligence, phase: str) -> str:
+def build_phase_intelligence(intelligence: RepositoryIntelligence, phase: str, repository=None) -> str:
     years = intelligence.fiscal_years
     if years:
         year_text = f"{years[0]} through {years[-1]} ({len(years)} fiscal years)"
@@ -56,6 +57,11 @@ def build_phase_intelligence(intelligence: RepositoryIntelligence, phase: str) -
             "- Do not infer financial conclusions merely from concept availability.",
         ]
     )
+    if phase == "revenue-earnings-engine" and repository is not None:
+        financial_evidence = collect_financial_intelligence(repository)
+        if financial_evidence:
+            lines.extend(["", financial_evidence])
+
     return "\n".join(lines)
 
 
