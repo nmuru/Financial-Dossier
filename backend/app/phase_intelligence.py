@@ -6,6 +6,8 @@ data concepts are available. It deliberately avoids software-repository concepts
 """
 from __future__ import annotations
 
+import json
+
 from .repository_intelligence import RepositoryIntelligence, collect_repository_intelligence
 from .edgar_financials import build_financial_intelligence
 
@@ -50,7 +52,31 @@ def build_phase_intelligence(intelligence: RepositoryIntelligence, phase: str, f
         lines.append("- none detected")
 
     if financial_intelligence:
-        lines.extend(["", "UPFRONT STRUCTURED FINANCIAL DATA (SEC via EdgarTools):", financial_intelligence])
+        phase_key = {
+            "revenue-earnings-engine": "revenue_earnings",
+            "financial-resilience": "financial_resilience",
+            "capital-cash-deployment": "capital_cash_deployment",
+            "accounting-signals-anomalies": "accounting_signals_anomalies",
+        }.get(phase)
+        phase_payload = financial_intelligence
+        try:
+            parsed = json.loads(financial_intelligence)
+            phase_data = parsed.get("phase_data", {}).get(phase_key) if phase_key else None
+            if phase_data is not None:
+                phase_payload = json.dumps(
+                    {
+                        "source": parsed.get("source"),
+                        "identifier": parsed.get("identifier"),
+                        "company": parsed.get("company"),
+                        "phase": phase,
+                        "periods": parsed.get("historical", {}).get("periods_requested"),
+                        "data": phase_data,
+                    },
+                    ensure_ascii=False,
+                )
+        except (TypeError, ValueError, json.JSONDecodeError):
+            pass
+        lines.extend(["", "UPFRONT STRUCTURED FINANCIAL DATA (SEC via EdgarTools):", phase_payload])
 
     lines.extend(
         [
