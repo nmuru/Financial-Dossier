@@ -203,22 +203,11 @@ def _derived_metrics(income: dict[str, Any], balance: dict[str, Any], cashflow: 
 def build_financial_intelligence(identifier: str, *, historical_periods: int = 5, view: str = "standard") -> str:
     """Build phase-ready, structured SEC financial intelligence using EdgarTools."""
     payload = collect_financial_statements(identifier, historical_periods=historical_periods, view=view)
-    annual = payload.get("annual", {})
-    income = _extract_metric_series(
-        Company(identifier).get_financials().income_statement(view=view),
-        view,
-        historical_periods,
-    )
-    balance = _extract_metric_series(
-        Company(identifier).get_financials().balance_sheet(view=view),
-        view,
-        historical_periods,
-    )
-    cashflow = _extract_metric_series(
-        Company(identifier).get_financials().cash_flow_statement(view=view),
-        view,
-        historical_periods,
-    )
+    company = Company(identifier)
+    financials = company.get_financials()
+    income = _extract_metric_series(financials.income_statement(view=view), view, historical_periods)
+    balance = _extract_metric_series(financials.balance_sheet(view=view), view, historical_periods)
+    cashflow = _extract_metric_series(financials.cash_flow_statement(view=view), view, historical_periods)
     payload["metrics"] = {
         "income_statement": income,
         "balance_sheet": balance,
