@@ -20,19 +20,26 @@ The source normally contains:
 
 Future runs may contain additional financial files supplied by the user. Treat all supplied files as controlled evidence and preserve their provenance.
 
-# Mandatory Research Pipeline
+# Evidence Retrieval Model
 
-Before phase analysis, the runtime performs two mandatory preliminary research stages:
+The deterministic Python layer acquires the SEC Company Facts source and collects
+normalized annual financial statements with EdgarTools before the agent starts.
 
-1. Deterministic financial intelligence.
-   This extracts reproducible facts from the supplied financial files, such as company identity, SEC CIK, reporting periods, available concepts, and other directly observable data.
+The agent does NOT receive the financial statement rows in its initial context.
+Instead, it receives a compact evidence manifest and retrieves actual evidence
+through the runtime financial tools.
 
-2. Semantic financial research.
-   An LLM receives the deterministic intelligence and converts it into a concise, structured preliminary evidence brief for the selected financial phase.
+For standard financial statements:
+- call `get_financial_statements` first;
+- request only the statement and historical range needed by the current phase;
+- use the returned rows as the primary quantitative evidence.
 
-These stages are inputs to the financial agent. They are not the final analysis.
+Use the structured JSON tools only when the statement tool cannot answer a specific
+question or when an XBRL-level precision check is required.
 
-Do not describe the preliminary research as software repository discovery. Do not assume that absence of software concepts means that the financial source is empty.
+There is no preliminary semantic-research LLM stage. There is no separate LLM
+summarization of deterministic financial data. The phase agent performs the
+financial reasoning directly over retrieved evidence.
 
 # Financial Evidence Discipline
 
@@ -51,9 +58,7 @@ When sources disagree, preserve the distinction and identify the relevant source
 
 # Phase and Skill Model
 
-The runtime supplies a phase-specific deterministic financial intelligence package and a semantic preliminary research brief.
-
-The runtime also supplies the selected financial agent definition and a dynamic inventory of skill metadata. Skill Markdown bodies are not loaded automatically into the initial context.
+The runtime supplies a compact phase-specific financial evidence manifest and a dynamic inventory of skill metadata. Skill Markdown bodies are not loaded automatically into the initial context.
 
 Use the skill inventory to understand which analytical capabilities are available. Read a skill resource explicitly when its methodology is required.
 
@@ -78,7 +83,7 @@ The architecture is intentionally extensible. A future run may provide:
 - analyst/user-provided schedules;
 - a local or mounted file location.
 
-The deterministic and semantic research stages must incorporate those controlled sources before the phase agent performs analysis.
+Controlled additional sources should be retrieved selectively through the available workspace tools before the phase agent makes claims.
 
 # Read-Only Evidence
 
