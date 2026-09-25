@@ -99,14 +99,19 @@ def _run_batch(batch: list[tuple[str, str]], repository: Path, phase_packages: d
 
 
 def _phase_context(phase: str, deterministic: str, repository_research: str, phase_research: str) -> str:
+    """Build agent context with deterministic financial data first.
+
+    Legacy repository/semantic research is retained for provenance and secondary
+    clues, but it must not force the agent to rediscover financial statement data.
+    """
     return "\n\n".join([
         deterministic,
-        "UPSTREAM SEMANTIC FINANCIAL RESEARCH BRIEF (PRELIMINARY EVIDENCE)",
-        "Use this brief as preliminary financial evidence for the phase. Do not treat it as a final conclusion and do not invent figures.",
+        "LEGACY REPOSITORY / SEMANTIC RESEARCH — SECONDARY CONTEXT ONLY",
         repository_research,
-        f"PHASE-SPECIFIC SEMANTIC FINANCIAL RESEARCH BRIEF FOR {phase}",
-        "Use this preliminary evidence to focus the financial analysis. Verify quantitative claims against the supplied source data.",
+        f"LEGACY PHASE RESEARCH FOR {phase} — SECONDARY CONTEXT ONLY",
         phase_research,
+        "PRIMARY EVIDENCE RULE: use the structured SEC financial data above for quantitative claims. "
+        "Do not reconstruct statements from the legacy research or generic JSON search.",
     ])
 
 
