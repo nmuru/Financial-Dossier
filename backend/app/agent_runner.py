@@ -633,7 +633,10 @@ Prioritize high-value financial evidence and synthesis. When the available evide
 
     instructions = "\n\n".join(part for part in [common_instructions, common_agent_contract, agent_definition, resource_context, skill_metadata_context, phase_intelligence, handoff] if part)
     client = AsyncOpenAI(base_url=base_url, api_key=api_key.strip())
-    agent = Agent(name=f"Financial {phase_name}", instructions=instructions, model=OpenAIChatCompletionsModel(model=model.strip(), openai_client=client), tools=_build_tools(phase, repository, output_run_dir))
+    tools = _build_tools(phase, repository, output_run_dir)
+    tool_names = [getattr(tool, "name", type(tool).__name__) for tool in tools]
+    logger.warning("AGENT_DIAG tools trace_id=%s phase=%s tool_count=%d tools=%s", trace_id if "trace_id" in locals() else "pending", phase, len(tool_names), json.dumps(tool_names))
+    agent = Agent(name=f"Financial {phase_name}", instructions=instructions, model=OpenAIChatCompletionsModel(model=model.strip(), openai_client=client), tools=tools)
     trace_id = uuid.uuid4().hex[:12]
     hooks = AgentDiagnosticsHooks(trace_id, phase)
     started = time.perf_counter()
