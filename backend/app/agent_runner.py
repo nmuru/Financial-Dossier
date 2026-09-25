@@ -14,6 +14,7 @@ from openai import AsyncOpenAI
 
 from .config import settings
 from .run_control import RunCancelled, RunControl
+from .financial_tools import build_financial_tools
 
 logger = logging.getLogger(__name__)
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -587,6 +588,7 @@ def _build_tools(phase: str, repository: Path, output_run_dir: Path):
         read_resource,
         list_previous_phase_outputs,
         read_previous_phase_output,
+        *build_financial_tools(root),
     ]
 
 
