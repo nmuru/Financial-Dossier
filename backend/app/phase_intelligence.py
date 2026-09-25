@@ -7,9 +7,10 @@ data concepts are available. It deliberately avoids software-repository concepts
 from __future__ import annotations
 
 from .repository_intelligence import RepositoryIntelligence, collect_repository_intelligence
+from .edgar_financials import build_financial_intelligence
 
 
-def build_phase_intelligence(intelligence: RepositoryIntelligence, phase: str) -> str:
+def build_phase_intelligence(intelligence: RepositoryIntelligence, phase: str, financial_intelligence: str = "") -> str:
     years = intelligence.fiscal_years
     if years:
         year_text = f"{years[0]} through {years[-1]} ({len(years)} fiscal years)"
@@ -47,6 +48,9 @@ def build_phase_intelligence(intelligence: RepositoryIntelligence, phase: str) -
         lines.extend(f"- {name}" for name in intelligence.concept_names[:80])
     else:
         lines.append("- none detected")
+
+    if financial_intelligence:
+        lines.extend(["", "UPFRONT STRUCTURED FINANCIAL DATA (SEC via EdgarTools):", financial_intelligence])
 
     lines.extend(
         [
