@@ -177,29 +177,23 @@ def analyze_repository(company_name: str, phases_per_batch: int = settings.phase
                                   )
             intelligence: RepositoryIntelligence = collect_repository_intelligence(repository); diagnostics.run_event("repository_intelligence_collected", files_considered=intelligence.file_count); _check_cancelled(run_control)
             financial_intelligence = build_financial_intelligence(company_name, historical_periods=5, view="standard"); diagnostics.run_event("financial_intelligence_collected", output_chars=len(financial_intelligence)); _check_cancelled(run_control)
-            diagnostics.run_event("repository_research_started")
-            repository_research = run_repository_research(intelligence=intelligence, repository=repository, provider=provider, model=model, api_key=api_key, run_control=run_control); _check_cancelled(run_control)
-            write_research_artifact(output_run_dir / "repository-research.md", kind="repository", phase=None, content=repository_research); diagnostics.run_event("repository_research_completed", output_chars=len(repository_research), llm_requests=1)
+            # Retain the legacy repository/phase research artifacts, but do not spend
+            # LLM turns generating them. Deterministic financial intelligence is now the
+            # primary evidence supplied to the analysis agents.
+            diagnostics.run_event("repository_research_started", execution="deterministic_only")
+            repository_research = intelligence.to_json()
+            write_research_artifact(output_run_dir / "repository-research.md", kind="repository", phase=None, content=repository_research)
+            diagnostics.run_event("repository_research_completed", output_chars=len(repository_research), llm_requests=0)
+
             deterministic_phase_packages = {key: build_phase_intelligence(intelligence, key, financial_intelligence=financial_intelligence) for key in selected_ids}
-            phase_research: dict[str, str] = {}; phase_research_failures: list[dict] = []
-            diagnostics.run_event("phase_research_started", phase_count=len(selected_ids), expected_llm_requests=len(selected_ids), execution="sequential")
+            phase_research: dict[str, str] = {}
+            phase_research_failures: list[dict] = []
+            diagnostics.run_event("phase_research_started", phase_count=len(selected_ids), expected_llm_requests=0, execution="deterministic_only")
             for key in selected_ids:
                 _check_cancelled(run_control)
-                phase_name = phase_by_id[key]
-                try:
-                    phase_research[key] = run_phase_research(phase=key, phase_intelligence=deterministic_phase_packages[key], repository_research=repository_research, repository=repository, provider=provider, model=model, api_key=api_key, run_control=run_control)
-                    write_research_artifact(output_run_dir / key / "phase-research.md", kind="phase", phase=key, content=phase_research[key])
-                    diagnostics.run_event("phase_research_completed", phase=key, output_chars=len(phase_research[key]), llm_requests=1)
-                except RunCancelled:
-                    raise
-                except Exception as exc:
-                    failure = _phase_failure(key, phase_name, exc)
-                    phase_research_failures.append(failure)
-                    failures.append(failure)
-                    diagnostics.run_event("phase_research_failed", phase=key, error_type=type(exc).__name__, error=str(exc))
-                    failure_path = output_run_dir / key / "phase-research-failure.md"
-                    failure_path.parent.mkdir(parents=True, exist_ok=True)
-                    failure_path.write_text(f"# Phase Research Failed\n\nPhase: {phase_name}\n\nError type: {type(exc).__name__}\n\nError: {exc}\n", encoding="utf-8")
+                phase_research[key] = deterministic_phase_packages[key]
+                write_research_artifact(output_run_dir / key / "phase-research.md", kind="phase", phase=key, content=phase_research[key])
+                diagnostics.run_event("phase_research_completed", phase=key, output_chars=len(phase_research[key]), llm_requests=0)
             runnable_ids = [key for key in selected_ids if key in phase_research]; runnable_batches = []
             for batch in batches:
                 runnable_batch = [(key, name) for key, name in batch if key in phase_research]
