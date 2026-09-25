@@ -512,28 +512,6 @@ def _build_tools(phase: str, repository: Path, output_run_dir: Path):
         }, ensure_ascii=False)
 
     @function_tool
-    def get_financial_statements(
-        identifier: str,
-        periods: int = 5,
-        view: str = "standard",
-    ) -> str:
-        """Retrieve SEC annual income statement, balance sheet, and cash flow using EdgarTools.
-
-        Use this as the primary tool for standard financial statements and
-        multi-year financial data. Use JSON tools only for targeted ambiguity
-        or precision checks after using this tool.
-        """
-        try:
-            payload = collect_financial_statements(
-                identifier,
-                historical_periods=periods,
-                view=view,
-            )
-            return json.dumps(payload, ensure_ascii=False)
-        except EdgarFinancialsError as exc:
-            return json.dumps({"error": str(exc)}, ensure_ascii=False)
-
-    @function_tool
     def search_repository(query: str, max_results: int = 100) -> str:
         """Search repository text for conditional follow-up evidence not already present in deterministic intelligence."""
         matches = []
@@ -604,7 +582,6 @@ def _build_tools(phase: str, repository: Path, output_run_dir: Path):
         search_json,
         read_json_value,
         query_json,
-        get_financial_statements,
         list_resources,
         read_resource,
         list_previous_phase_outputs,
