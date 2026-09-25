@@ -299,39 +299,25 @@ def _build_tools(phase: str, repository: Path, output_run_dir: Path):
         if not selected.get("available"):
             return json.dumps({"available": False, "statement": key}, ensure_ascii=False)
 
+        table = selected.get("table", "")
         rows = selected.get("rows", [])
-        # EdgarTools returns statement rows with periods represented as columns.
-        # Keep the rows intact: the LLM can see actual labels and values instead
-        # of opaque collector metadata.
-        columns = selected.get("columns", [])
-        period_columns = [str(x) for x in columns if str(x).strip()]
-        if len(period_columns) > periods:
-            period_columns = period_columns[-periods:]
+        columns = [str(x) for x in selected.get("columns", []) if str(x).strip()]
 
-        compact_rows = []
-        for row in rows:
-            compact = {}
-            for key_name, value in row.items():
-                key_text = str(key_name)
-                if key_text in period_columns or key_text.lower() in {
-                    "label", "concept", "standard_concept", "unit", "dimension",
-                    "dimension_member", "dimension_member_label", "level"
-                }:
-                    compact[key_text] = value
-            if compact:
-                compact_rows.append(compact)
-
+        # The human-readable table is the primary representation. The row data
+        # remains available as structured JSON for exact values when needed.
         result = {
             "source": payload.get("source", "SEC via EdgarTools"),
             "company": payload.get("company", {}),
             "statement": key,
             "periods_requested": periods,
-            "period_columns": period_columns,
-            "rows": compact_rows,
+            "columns": columns,
+            "table": table,
+            "rows": rows,
         }
         serialized = json.dumps(result, ensure_ascii=False)
         if len(serialized) > 40000:
-            result["rows"] = compact_rows[:120]
+            # Prefer preserving the readable table and trim structured rows.
+            result["rows"] = rows[:80]
             result["truncated"] = True
             serialized = json.dumps(result, ensure_ascii=False)
         return serialized
