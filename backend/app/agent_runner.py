@@ -13,6 +13,7 @@ from agents.models.openai_chatcompletions import OpenAIChatCompletionsModel
 from openai import AsyncOpenAI
 
 from .config import settings
+from .edgar_financials import EdgarFinancialsError, collect_financial_statements
 from .run_control import RunCancelled, RunControl
 
 logger = logging.getLogger(__name__)
@@ -229,7 +230,7 @@ def _build_tools(phase: str, repository: Path, output_run_dir: Path):
             return f"Not a file: {filename}"
 
         try:
-            return file_path.read_text(encoding="utf-8", errors="replace")
+            return file_path.read_text(encoding="utf-8", errors="replace")[:30_000]
         except OSError as exc:
             return f"Unable to read {filename}: {exc}"
     @function_tool
@@ -288,14 +289,12 @@ def _build_tools(phase: str, repository: Path, output_run_dir: Path):
         if not target.is_file():
             return "File does not exist or is not a regular file."
 
-        # Small JSON documents may still be read directly. Larger structured
-        # resources must use the bounded JSON query interface.
-        hard_limit = 30_000
-        if target.suffix.lower() == ".json" and target.stat().st_size > hard_limit:
+        # Never expose JSON documents wholesale through the generic file reader.
+        if target.suffix.lower() == ".json":
             return (
-                f"Direct read of this JSON resource is restricted because it is "
-                f"{target.stat().st_size} bytes. Use inspect_json_structure, "
-                "search_json, read_json_value, or query_json to retrieve bounded evidence."
+                "Direct reading of JSON resources is disabled. Use "
+                "inspect_json_structure, search_json, read_json_value, or query_json "
+                "to retrieve a bounded evidence slice."
             )
 
         hard_limit = 30_000
@@ -513,6 +512,28 @@ def _build_tools(phase: str, repository: Path, output_run_dir: Path):
         }, ensure_ascii=False)
 
     @function_tool
+    def get_financial_statements(
+        identifier: str,
+        periods: int = 5,
+        view: str = "standard",
+    ) -> str:
+        """Retrieve SEC annual income statement, balance sheet, and cash flow using EdgarTools.
+
+        Use this as the primary tool for standard financial statements and
+        multi-year financial data. Use JSON tools only for targeted ambiguity
+        or precision checks after using this tool.
+        """
+        try:
+            payload = collect_financial_statements(
+                identifier,
+                historical_periods=periods,
+                view=view,
+            )
+            return json.dumps(payload, ensure_ascii=False)
+        except EdgarFinancialsError as exc:
+            return json.dumps({"error": str(exc)}, ensure_ascii=False)
+
+    @function_tool
     def search_repository(query: str, max_results: int = 100) -> str:
         """Search repository text for conditional follow-up evidence not already present in deterministic intelligence."""
         matches = []
@@ -583,6 +604,7 @@ def _build_tools(phase: str, repository: Path, output_run_dir: Path):
         search_json,
         read_json_value,
         query_json,
+        get_financial_statements,
         list_resources,
         read_resource,
         list_previous_phase_outputs,
@@ -604,7 +626,12 @@ class AgentDiagnosticsHooks(RunHooks):
 
     async def on_llm_start(self, context, agent, system_prompt, input_items) -> None:
         self.llm_turn += 1
-        logger.warning("AGENT_DIAG llm_start trace_id=%s phase=%s turn=%d input_items=%d system_prompt_chars=%d", self.trace_id, self.phase, self.llm_turn, len(input_items), len(system_prompt or ""))
+        input_chars = len(json.dumps(input_items, ensure_ascii=False, default=str))
+        logger.warning(
+            "AGENT_DIAG llm_start trace_id=%s phase=%s turn=%d input_items=%d input_chars=%d system_prompt_chars=%d",
+            self.trace_id, self.phase, self.llm_turn, len(input_items), input_chars,
+            len(system_prompt or ""),
+        )
 
     async def on_llm_end(self, context, agent, response) -> None:
         output_items = getattr(response, "output", []) or []
@@ -647,8 +674,9 @@ async def _run_agent(*, phase: str, phase_name: str, repository: Path, phase_int
         handoff = "\n\nPrevious phase output is supporting context only. Verify important claims against repository evidence.\n\n" + previous_output[:20000]
 
     common_instructions = """You are performing an evidence-driven financial analysis phase.
-The controlled financial source data has already been acquired and deterministic financial intelligence has already been collected before your first turn. Treat that intelligence and the preliminary semantic research as the primary evidence index.
-Do not repeat broad source discovery merely to reconstruct information already present in the intelligence package. Use supplied financial-source tools only for a specific ambiguity, missing data passage, or precision check. For JSON evidence, use inspect_json_structure/search_json/read_json_value/query_json rather than read_file; these tools are bounded and retrieve only the evidence slice needed for the analysis.
+The controlled financial source data has already been acquired and deterministic financial intelligence has already been collected before your first turn.
+For standard financial statements and historical financial data, use get_financial_statements first. It retrieves SEC-reported data through EdgarTools. Do not reconstruct income statement, balance sheet, or cash flow statements by generic JSON discovery when EdgarTools can provide them.
+Use the JSON evidence tools only for a specific ambiguity, missing data passage, or precision check. For JSON evidence, use inspect_json_structure/search_json/read_json_value/query_json rather than read_file; these tools are bounded and retrieve only the evidence slice needed for the analysis.
 Do not invent financial facts or values. Distinguish verified data, reasonable analytical inference, and unknowns when evidence is incomplete.
 The supplied financial files are read-only. Do not modify them.
 Return only complete professional Markdown financial analysis for the requested phase. Do not describe the agent, tools, prompts, intelligence collection, or execution process.
@@ -657,7 +685,21 @@ Skill resources are supplied explicitly by the runtime. Use those paths and tool
 FINANCIAL ANALYSIS BUDGET
 Prioritize high-value financial evidence and synthesis. When the available evidence is sufficient, stop broad exploration and produce the best-supported analysis. Never invent missing figures; state when data is unavailable or insufficient."""
 
-    instructions = "\n\n".join(part for part in [common_instructions, common_agent_contract, agent_definition, resource_context, skill_metadata_context, phase_intelligence, handoff] if part)
+    intelligence_limit = 60_000
+    bounded_phase_intelligence = phase_intelligence[:intelligence_limit]
+    if len(phase_intelligence) > intelligence_limit:
+        bounded_phase_intelligence += "\n[phase intelligence truncated; use runtime tools for targeted evidence]"
+    instructions = "\n\n".join(
+        part for part in [
+            common_instructions,
+            common_agent_contract,
+            agent_definition,
+            resource_context,
+            skill_metadata_context,
+            bounded_phase_intelligence,
+            handoff,
+        ] if part
+    )
     client = AsyncOpenAI(base_url=base_url, api_key=api_key.strip())
     agent = Agent(name=f"Financial {phase_name}", instructions=instructions, model=OpenAIChatCompletionsModel(model=model.strip(), openai_client=client), tools=_build_tools(phase, repository, output_run_dir))
     trace_id = uuid.uuid4().hex[:12]
