@@ -107,6 +107,7 @@ def _resolve_skill_resources(phase: str, output_run_dir: Path) -> dict[str, Any]
         "artifacts": {},
         "tools": {
             "repository": ["list_files", "glob", "grep", "read_file", "search_repository"],
+            "financial": ["get_financial_statements"],
             "structured_json": ["inspect_json_structure", "search_json", "read_json_value", "query_json"],
             "runtime_resources": ["list_resources", "read_resource"],
             "output_content": ["list_previous_phase_outputs", "read_previous_phase_output"],
@@ -260,6 +261,80 @@ def _build_tools(phase: str, repository: Path, output_run_dir: Path):
         except OSError as exc:
             return f"Could not read runtime resource: {exc}"
 
+
+    @function_tool
+    def get_financial_statements(statement: str = "income_statement", periods: int = 5) -> str:
+        """Retrieve bounded, actual SEC financial-statement rows collected by EdgarTools.
+
+        This is the primary financial evidence tool. It reads the normalized
+        financial collection created for this run and returns only the requested
+        statement and recent annual periods. It does not expose the raw Company
+        Facts JSON wholesale.
+        """
+        data_path = root / "financial-data.json"
+        if not data_path.is_file():
+            return "Normalized financial data is not available for this run."
+        try:
+            payload = json.loads(data_path.read_text(encoding="utf-8"))
+        except Exception as exc:
+            return f"Could not read normalized financial data: {type(exc).__name__}: {exc}"
+
+        aliases = {
+            "income_statement": "income_statement",
+            "income": "income_statement",
+            "profit_loss": "income_statement",
+            "balance_sheet": "balance_sheet",
+            "balance": "balance_sheet",
+            "cash_flow": "cash_flow_statement",
+            "cash_flow_statement": "cash_flow_statement",
+            "cashflow": "cash_flow_statement",
+        }
+        key = aliases.get(statement.strip().lower())
+        if not key:
+            return "Unknown statement. Use income_statement, balance_sheet, or cash_flow_statement."
+
+        periods = max(1, min(int(periods), 10))
+        source = payload.get("historical") or payload.get("annual") or {}
+        selected = source.get(key, {})
+        if not selected.get("available"):
+            return json.dumps({"available": False, "statement": key}, ensure_ascii=False)
+
+        rows = selected.get("rows", [])
+        # EdgarTools returns statement rows with periods represented as columns.
+        # Keep the rows intact: the LLM can see actual labels and values instead
+        # of opaque collector metadata.
+        columns = selected.get("columns", [])
+        period_columns = [str(x) for x in columns if str(x).strip()]
+        if len(period_columns) > periods:
+            period_columns = period_columns[-periods:]
+
+        compact_rows = []
+        for row in rows:
+            compact = {}
+            for key_name, value in row.items():
+                key_text = str(key_name)
+                if key_text in period_columns or key_text.lower() in {
+                    "label", "concept", "standard_concept", "unit", "dimension",
+                    "dimension_member", "dimension_member_label", "level"
+                }:
+                    compact[key_text] = value
+            if compact:
+                compact_rows.append(compact)
+
+        result = {
+            "source": payload.get("source", "SEC via EdgarTools"),
+            "company": payload.get("company", {}),
+            "statement": key,
+            "periods_requested": periods,
+            "period_columns": period_columns,
+            "rows": compact_rows,
+        }
+        serialized = json.dumps(result, ensure_ascii=False)
+        if len(serialized) > 40000:
+            result["rows"] = compact_rows[:120]
+            result["truncated"] = True
+            serialized = json.dumps(result, ensure_ascii=False)
+        return serialized
 
     @function_tool
     def list_files(path: str = ".", max_entries: int = 300) -> str:
@@ -582,6 +657,7 @@ def _build_tools(phase: str, repository: Path, output_run_dir: Path):
         search_json,
         read_json_value,
         query_json,
+        get_financial_statements,
         list_resources,
         read_resource,
         list_previous_phase_outputs,
@@ -651,9 +727,10 @@ async def _run_agent(*, phase: str, phase_name: str, repository: Path, phase_int
         handoff = "\n\nPrevious phase output is supporting context only. Verify important claims against repository evidence.\n\n" + previous_output[:20000]
 
     common_instructions = """You are performing an evidence-driven financial analysis phase.
-The controlled financial source data has already been acquired and deterministic financial intelligence has already been collected before your first turn.
-For standard financial statements and historical financial data, use get_financial_statements first. It retrieves SEC-reported data through EdgarTools. Do not reconstruct income statement, balance sheet, or cash flow statements by generic JSON discovery when EdgarTools can provide them.
-Use the JSON evidence tools only for a specific ambiguity, missing data passage, or precision check. For JSON evidence, use inspect_json_structure/search_json/read_json_value/query_json rather than read_file; these tools are bounded and retrieve only the evidence slice needed for the analysis.
+Financial evidence is stored outside the model context and must be retrieved selectively.
+Start with get_financial_statements for the statement(s) relevant to the phase. It returns actual SEC-reported rows collected by EdgarTools.
+Use JSON tools only when the requested evidence is not available through the financial statement tool or when a specific SEC XBRL fact needs verification.
+Use read_file only for non-JSON user-supplied documents.
 Do not invent financial facts or values. Distinguish verified data, reasonable analytical inference, and unknowns when evidence is incomplete.
 The supplied financial files are read-only. Do not modify them.
 Return only complete professional Markdown financial analysis for the requested phase. Do not describe the agent, tools, prompts, intelligence collection, or execution process.
@@ -662,10 +739,7 @@ Skill resources are supplied explicitly by the runtime. Use those paths and tool
 FINANCIAL ANALYSIS BUDGET
 Prioritize high-value financial evidence and synthesis. When the available evidence is sufficient, stop broad exploration and produce the best-supported analysis. Never invent missing figures; state when data is unavailable or insufficient."""
 
-    intelligence_limit = 60_000
-    bounded_phase_intelligence = phase_intelligence[:intelligence_limit]
-    if len(phase_intelligence) > intelligence_limit:
-        bounded_phase_intelligence += "\n[phase intelligence truncated; use runtime tools for targeted evidence]"
+    bounded_phase_intelligence = phase_intelligence
     instructions = "\n\n".join(
         part for part in [
             common_instructions,
@@ -682,7 +756,7 @@ Prioritize high-value financial evidence and synthesis. When the available evide
     trace_id = uuid.uuid4().hex[:12]
     hooks = AgentDiagnosticsHooks(trace_id, phase)
     started = time.perf_counter()
-    logger.warning("AGENT_DIAG start trace_id=%s phase=%s model=%s provider=%s repository=%s intelligence_chars=%d common_agent_contract_chars=%d agent_definition_chars=%d skill_chars=%d skill_resources=%s max_turns=%d", trace_id, phase, model, provider_name, repository, len(phase_intelligence), len(common_agent_contract), len(agent_definition), len(skill_metadata_context), json.dumps(skill_resources, sort_keys=True), settings.phase_agent_max_turns)
+    logger.warning("AGENT_DIAG start trace_id=%s phase=%s model=%s provider=%s repository=%s manifest_chars=%d common_agent_contract_chars=%d agent_definition_chars=%d skill_chars=%d skill_resources=%s max_turns=%d", trace_id, phase, model, provider_name, repository, len(phase_intelligence), len(common_agent_contract), len(agent_definition), len(skill_metadata_context), json.dumps(skill_resources, sort_keys=True), settings.phase_agent_max_turns)
     try:
         if run_control and run_control.is_cancelled():
             raise RunCancelled("Analysis stopped by the user.")
