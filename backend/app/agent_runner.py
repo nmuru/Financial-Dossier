@@ -364,17 +364,17 @@ def _build_tools(phase: str, repository: Path, output_run_dir: Path):
         if not target.is_file():
             return "File does not exist or is not a regular file."
 
-        # Never expose JSON documents wholesale through the generic file reader.
-        if target.suffix.lower() == ".json":
-            return (
-                "Direct reading of JSON resources is disabled. Use "
-                "inspect_json_structure, search_json, read_json_value, or query_json "
-                "to retrieve a bounded evidence slice."
-            )
-
         hard_limit = 30_000
         bounded_chars = max(1, min(int(max_chars), hard_limit))
         try:
+            if target.suffix.lower() == ".json":
+                size = target.stat().st_size
+                if size > hard_limit:
+                    return (
+                        "This JSON resource is larger than the direct-read limit. "
+                        "Use inspect_json_structure, search_json, read_json_value, or query_json "
+                        "to retrieve a bounded evidence slice."
+                    )
             return target.read_text(encoding="utf-8", errors="replace")[:bounded_chars]
         except OSError as exc:
             return f"Could not read file: {exc}"
