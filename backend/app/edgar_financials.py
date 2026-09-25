@@ -105,11 +105,14 @@ def _extract_metric_series(statement: Any, view: str, periods: int) -> dict[str,
         return {"available": False, "periods": [], "metrics": {}}
 
     columns = list(rows[0].keys())
-    period_col = _find_column(columns, "fiscal year", "period", "date", "year", "end")
-    label_col = _find_column(columns, "concept", "label", "line item", "name", "description")
-
-    # Standard EdgarTools output is expected to have line-item rows and period columns.
-    period_columns = [column for column in columns if column != label_col]
+    label_col = "label" if "label" in columns else _find_column(columns, "concept", "line item", "name", "description")
+    metadata_columns = {
+        label_col, "concept", "standard_concept", "level", "abstract",
+        "parent_concept", "parent_abstract_concept", "dimension",
+        "dimension_axis", "dimension_member", "dimension_member_label",
+        "unit", "point_in_time",
+    }
+    period_columns = [column for column in columns if column not in metadata_columns]
     period_columns = period_columns[-max(1, min(periods, 5)):]
     metrics: dict[str, dict[str, Any]] = {}
 
@@ -208,11 +211,39 @@ def build_financial_intelligence(identifier: str, *, historical_periods: int = 5
     income = _extract_metric_series(financials.income_statement(view=view), view, historical_periods)
     balance = _extract_metric_series(financials.balance_sheet(view=view), view, historical_periods)
     cashflow = _extract_metric_series(financials.cash_flow_statement(view=view), view, historical_periods)
+    derived = _derived_metrics(income, balance, cashflow)
     payload["metrics"] = {
         "income_statement": income,
         "balance_sheet": balance,
         "cash_flow_statement": cashflow,
-        "derived": _derived_metrics(income, balance, cashflow),
+        "derived": derived,
+    }
+    payload["phase_data"] = {
+        "revenue_earnings": {
+            "income_statement": income,
+            "derived": {key: derived[key] for key in (
+                "gross_margin", "operating_margin", "net_margin",
+                "revenue_growth", "net_income_growth", "eps_growth",
+            ) if key in derived},
+        },
+        "financial_resilience": {
+            "balance_sheet": balance,
+            "cash_flow_statement": cashflow,
+            "derived": {key: derived[key] for key in (
+                "net_debt", "operating_cash_flow_growth",
+            ) if key in derived},
+        },
+        "capital_cash_deployment": {
+            "balance_sheet": balance,
+            "cash_flow_statement": cashflow,
+            "derived": {key: derived[key] for key in ("net_debt",) if key in derived},
+        },
+        "accounting_signals_anomalies": {
+            "income_statement": income,
+            "balance_sheet": balance,
+            "cash_flow_statement": cashflow,
+            "derived": derived,
+        },
     }
     return json.dumps(payload, ensure_ascii=False)
 
