@@ -1,7 +1,7 @@
 @echo off
 
-set "BACKEND=C:\Financial-Dossier\backend"
-set "FRONTEND=C:\Financial-Dossier\frontend"
+set "BACKEND=C:\Financial-Dossier\Financial-Analysis\backend"
+set "FRONTEND=C:\Financial-Dossier\Financial-Analysis\frontend"
 
 set "DEBUG_AGENT=true"
 set "PATH=C:\Users\n_mur\AppData\Roaming\npm;%PATH%"
