@@ -176,7 +176,10 @@ def analyze_repository(company_name: str, phases_per_batch: int = settings.phase
                                 #   repository_size_bytes=size_bytes
                                   )
             intelligence: RepositoryIntelligence = collect_repository_intelligence(repository); diagnostics.run_event("repository_intelligence_collected", files_considered=intelligence.file_count); _check_cancelled(run_control)
-            financial_intelligence = build_financial_intelligence(company_name, historical_periods=5, view="standard"); diagnostics.run_event("financial_intelligence_collected", output_chars=len(financial_intelligence)); _check_cancelled(run_control)
+            financial_intelligence = build_financial_intelligence(company_name, historical_periods=5, view="standard")
+            (output_run_dir / "financial-intelligence.json").write_text(financial_intelligence, encoding="utf-8")
+            diagnostics.run_event("financial_intelligence_collected", output_chars=len(financial_intelligence))
+            _check_cancelled(run_control)
             # Retain the legacy repository/phase research artifacts, but do not spend
             # LLM turns generating them. Deterministic financial intelligence is now the
             # primary evidence supplied to the analysis agents.
