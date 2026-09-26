@@ -411,7 +411,7 @@ export default function Home() {
 
   return <div className="app-shell">
     <header className="topbar"><div><div className="brand">Financial Dossier</div><div className="tagline">SEC Company Facts → Financial Intelligence Dossier</div></div>{analysisStarted && companyName && <div className="repo-pill" title={companyName}>{companyName.replace(/^https?:\/\//, "")}</div>}</header>
-    {!analysisStarted ? <main className="landing"><div className="landing-card"><div className="eyebrow">AI FINANCIAL ANALYSIS</div><h1>Turn SEC company facts into a financial intelligence dossier.</h1><p className="landing-copy">Submit a company name or SEC Company Facts JSON URL to progressively analyze earnings quality, financial resilience, capital deployment, and accounting signals from structured SEC XBRL data.</p>
+    {!analysisStarted ? <main className="landing"><div className="landing-card"><div className="eyebrow">AI FINANCIAL ANALYSIS</div><h1>Turn SEC company facts into a financial intelligence dossier.</h1><p className="landing-copy">Submit a SEC Company Name to progressively analyze earnings quality, financial resilience, capital deployment, and accounting signals from structured SEC XBRL data.</p>
       
       
 
