@@ -13,6 +13,7 @@ from agents.models.openai_chatcompletions import OpenAIChatCompletionsModel
 from openai import AsyncOpenAI
 
 from .config import settings
+from .edgar_financials import EdgarFinancialsError, collect_financial_statements
 from .run_control import RunCancelled, RunControl
 
 logger = logging.getLogger(__name__)
@@ -106,6 +107,7 @@ def _resolve_skill_resources(phase: str, output_run_dir: Path) -> dict[str, Any]
         "artifacts": {},
         "tools": {
             "repository": ["list_files", "glob", "grep", "read_file", "search_repository"],
+            "financial": ["get_financial_statements"],
             "structured_json": ["inspect_json_structure", "search_json", "read_json_value", "query_json"],
             "runtime_resources": ["list_resources", "read_resource"],
             "output_content": ["list_previous_phase_outputs", "read_previous_phase_output"],
@@ -229,7 +231,7 @@ def _build_tools(phase: str, repository: Path, output_run_dir: Path):
             return f"Not a file: {filename}"
 
         try:
-            return file_path.read_text(encoding="utf-8", errors="replace")
+            return file_path.read_text(encoding="utf-8", errors="replace")[:30_000]
         except OSError as exc:
             return f"Unable to read {filename}: {exc}"
     @function_tool
@@ -261,6 +263,66 @@ def _build_tools(phase: str, repository: Path, output_run_dir: Path):
 
 
     @function_tool
+    def get_financial_statements(statement: str = "income_statement", periods: int = 5) -> str:
+        """Retrieve bounded, actual SEC financial-statement rows collected by EdgarTools.
+
+        This is the primary financial evidence tool. It reads the normalized
+        financial collection created for this run and returns only the requested
+        statement and recent annual periods. It does not expose the raw Company
+        Facts JSON wholesale.
+        """
+        data_path = root / "financial-data.json"
+        if not data_path.is_file():
+            return "Normalized financial data is not available for this run."
+        try:
+            payload = json.loads(data_path.read_text(encoding="utf-8"))
+        except Exception as exc:
+            return f"Could not read normalized financial data: {type(exc).__name__}: {exc}"
+
+        aliases = {
+            "income_statement": "income_statement",
+            "income": "income_statement",
+            "profit_loss": "income_statement",
+            "balance_sheet": "balance_sheet",
+            "balance": "balance_sheet",
+            "cash_flow": "cash_flow_statement",
+            "cash_flow_statement": "cash_flow_statement",
+            "cashflow": "cash_flow_statement",
+        }
+        key = aliases.get(statement.strip().lower())
+        if not key:
+            return "Unknown statement. Use income_statement, balance_sheet, or cash_flow_statement."
+
+        periods = max(1, min(int(periods), 10))
+        source = payload.get("historical") or payload.get("annual") or {}
+        selected = source.get(key, {})
+        if not selected.get("available"):
+            return json.dumps({"available": False, "statement": key}, ensure_ascii=False)
+
+        table = selected.get("table", "")
+        rows = selected.get("rows", [])
+        columns = [str(x) for x in selected.get("columns", []) if str(x).strip()]
+
+        # The human-readable table is the primary representation. The row data
+        # remains available as structured JSON for exact values when needed.
+        result = {
+            "source": payload.get("source", "SEC via EdgarTools"),
+            "company": payload.get("company", {}),
+            "statement": key,
+            "periods_requested": periods,
+            "columns": columns,
+            "table": table,
+            "rows": rows,
+        }
+        serialized = json.dumps(result, ensure_ascii=False)
+        if len(serialized) > 40000:
+            # Prefer preserving the readable table and trim structured rows.
+            result["rows"] = rows[:80]
+            result["truncated"] = True
+            serialized = json.dumps(result, ensure_ascii=False)
+        return serialized
+
+    @function_tool
     def list_files(path: str = ".", max_entries: int = 300) -> str:
         """List repository files and directories recursively, without modifying anything."""
         target = safe_path(path)
@@ -288,19 +350,17 @@ def _build_tools(phase: str, repository: Path, output_run_dir: Path):
         if not target.is_file():
             return "File does not exist or is not a regular file."
 
-        # Small JSON documents may still be read directly. Larger structured
-        # resources must use the bounded JSON query interface.
-        hard_limit = 30_000
-        if target.suffix.lower() == ".json" and target.stat().st_size > hard_limit:
-            return (
-                f"Direct read of this JSON resource is restricted because it is "
-                f"{target.stat().st_size} bytes. Use inspect_json_structure, "
-                "search_json, read_json_value, or query_json to retrieve bounded evidence."
-            )
-
         hard_limit = 30_000
         bounded_chars = max(1, min(int(max_chars), hard_limit))
         try:
+            if target.suffix.lower() == ".json":
+                size = target.stat().st_size
+                if size > hard_limit:
+                    return (
+                        "This JSON resource is larger than the direct-read limit. "
+                        "Use inspect_json_structure, search_json, read_json_value, or query_json "
+                        "to retrieve a bounded evidence slice."
+                    )
             return target.read_text(encoding="utf-8", errors="replace")[:bounded_chars]
         except OSError as exc:
             return f"Could not read file: {exc}"
@@ -583,6 +643,7 @@ def _build_tools(phase: str, repository: Path, output_run_dir: Path):
         search_json,
         read_json_value,
         query_json,
+        get_financial_statements,
         list_resources,
         read_resource,
         list_previous_phase_outputs,
@@ -604,7 +665,12 @@ class AgentDiagnosticsHooks(RunHooks):
 
     async def on_llm_start(self, context, agent, system_prompt, input_items) -> None:
         self.llm_turn += 1
-        logger.warning("AGENT_DIAG llm_start trace_id=%s phase=%s turn=%d input_items=%d system_prompt_chars=%d", self.trace_id, self.phase, self.llm_turn, len(input_items), len(system_prompt or ""))
+        input_chars = len(json.dumps(input_items, ensure_ascii=False, default=str))
+        logger.warning(
+            "AGENT_DIAG llm_start trace_id=%s phase=%s turn=%d input_items=%d input_chars=%d system_prompt_chars=%d",
+            self.trace_id, self.phase, self.llm_turn, len(input_items), input_chars,
+            len(system_prompt or ""),
+        )
 
     async def on_llm_end(self, context, agent, response) -> None:
         output_items = getattr(response, "output", []) or []
@@ -647,8 +713,10 @@ async def _run_agent(*, phase: str, phase_name: str, repository: Path, phase_int
         handoff = "\n\nPrevious phase output is supporting context only. Verify important claims against repository evidence.\n\n" + previous_output[:20000]
 
     common_instructions = """You are performing an evidence-driven financial analysis phase.
-The controlled financial source data has already been acquired and deterministic financial intelligence has already been collected before your first turn. Treat that intelligence and the preliminary semantic research as the primary evidence index.
-Do not repeat broad source discovery merely to reconstruct information already present in the intelligence package. Use supplied financial-source tools only for a specific ambiguity, missing data passage, or precision check. For JSON evidence, use inspect_json_structure/search_json/read_json_value/query_json rather than read_file; these tools are bounded and retrieve only the evidence slice needed for the analysis.
+Financial evidence is stored outside the model context and must be retrieved selectively.
+Start with get_financial_statements for the statement(s) relevant to the phase. It returns actual SEC-reported rows collected by EdgarTools.
+Use JSON tools only when the requested evidence is not available through the financial statement tool or when a specific SEC XBRL fact needs verification.
+Use read_file only for non-JSON user-supplied documents.
 Do not invent financial facts or values. Distinguish verified data, reasonable analytical inference, and unknowns when evidence is incomplete.
 The supplied financial files are read-only. Do not modify them.
 Return only complete professional Markdown financial analysis for the requested phase. Do not describe the agent, tools, prompts, intelligence collection, or execution process.
@@ -657,13 +725,24 @@ Skill resources are supplied explicitly by the runtime. Use those paths and tool
 FINANCIAL ANALYSIS BUDGET
 Prioritize high-value financial evidence and synthesis. When the available evidence is sufficient, stop broad exploration and produce the best-supported analysis. Never invent missing figures; state when data is unavailable or insufficient."""
 
-    instructions = "\n\n".join(part for part in [common_instructions, common_agent_contract, agent_definition, resource_context, skill_metadata_context, phase_intelligence, handoff] if part)
+    bounded_phase_intelligence = phase_intelligence
+    instructions = "\n\n".join(
+        part for part in [
+            common_instructions,
+            common_agent_contract,
+            agent_definition,
+            resource_context,
+            skill_metadata_context,
+            bounded_phase_intelligence,
+            handoff,
+        ] if part
+    )
     client = AsyncOpenAI(base_url=base_url, api_key=api_key.strip())
     agent = Agent(name=f"Financial {phase_name}", instructions=instructions, model=OpenAIChatCompletionsModel(model=model.strip(), openai_client=client), tools=_build_tools(phase, repository, output_run_dir))
     trace_id = uuid.uuid4().hex[:12]
     hooks = AgentDiagnosticsHooks(trace_id, phase)
     started = time.perf_counter()
-    logger.warning("AGENT_DIAG start trace_id=%s phase=%s model=%s provider=%s repository=%s intelligence_chars=%d common_agent_contract_chars=%d agent_definition_chars=%d skill_chars=%d skill_resources=%s max_turns=%d", trace_id, phase, model, provider_name, repository, len(phase_intelligence), len(common_agent_contract), len(agent_definition), len(skill_metadata_context), json.dumps(skill_resources, sort_keys=True), settings.phase_agent_max_turns)
+    logger.warning("AGENT_DIAG start trace_id=%s phase=%s model=%s provider=%s repository=%s manifest_chars=%d common_agent_contract_chars=%d agent_definition_chars=%d skill_chars=%d skill_resources=%s max_turns=%d", trace_id, phase, model, provider_name, repository, len(phase_intelligence), len(common_agent_contract), len(agent_definition), len(skill_metadata_context), json.dumps(skill_resources, sort_keys=True), settings.phase_agent_max_turns)
     try:
         if run_control and run_control.is_cancelled():
             raise RunCancelled("Analysis stopped by the user.")

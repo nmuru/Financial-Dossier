@@ -47,7 +47,7 @@ type AnalysisEvent =
   | { type: "analysis_cancelled"; company_name: string; run_id: string; completed_phases: string[]; failed_phases?: Failure[] }
   | { type: "analysis_failed"; company_name: string; run_id?: string; error: string };
 type RunStatus = { run_id: string; status: string; company_name: string; selected_phases: string[]; completed_phases: string[]; failures: Failure[]; active_phase: string | null; results: Record<string, string> };
-type StoredWorkspace = { runId: string; repoUrl: string; selectedPhases: string[]; completedPhases: string[]; activePhase: string; status: string; provenance: { model: string } | null; mode: "parallel" | "sequence"; objective: "document" | "understand" };
+type StoredWorkspace = { runId: string; companyName: string; selectedPhases: string[]; completedPhases: string[]; activePhase: string; status: string; provenance: { model: string } | null; mode: "parallel" | "sequence"; objective: "document" | "understand" };
 
 const analyses: Phase[] = [
   { id: "revenue-earnings-engine", label: "Revenue & Earnings Engine", shortLabel: "Earnings Engine" },
@@ -81,7 +81,7 @@ function emptyResult(companyName = ""): AnalysisResult {
 function makeRunId() { return (typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`).replace(/[^a-zA-Z0-9]/g, ""); }
 
 export default function Home() {
-  const [repoUrl, setRepoUrl] = useState("");
+  const [companyName, setCompanyName] = useState("");
   const [provider, setProvider] = useState("openrouter");
   const [model, setModel] = useState("openrouter/free");
   const [apiKey, setApiKey] = useState("");
@@ -119,7 +119,7 @@ export default function Home() {
         if (!stored.runId || stored.runId === DEMO_RUN_ID) { window.sessionStorage.removeItem(STORAGE_KEY); setRestored(true); return; }
         const storedCompleted = stored.completedPhases ?? [];
         const storedSelected = (stored.selectedPhases?.length ? stored.selectedPhases : defaultSelectedPhases).filter((analysis) => !storedCompleted.includes(analysis));
-        setRepoUrl(stored.repoUrl); setRunId(stored.runId); setSelectedPhases(storedSelected); setMode(stored.mode ?? "parallel"); setObjective(stored.objective ?? "document");
+        setCompanyName(stored.companyName); setRunId(stored.runId); setSelectedPhases(storedSelected); setMode(stored.mode ?? "parallel"); setObjective(stored.objective ?? "document");
         setCompletedPhases(storedCompleted); setActivePhase(stored.activePhase || storedCompleted[storedCompleted.length - 1] || storedSelected[0] || analyses[0].id);
         setAnalysisStarted(true); setIsDemo(false); setProvenance(stored.provenance ?? null);
         const response = await fetch(`${API_BASE_URL}/api/analysis/${stored.runId}/status`, { cache: "no-store" });
@@ -153,9 +153,9 @@ export default function Home() {
 
   useEffect(() => {
     if (!analysisStarted || isDemo || !runId) return;
-    const snapshot: StoredWorkspace = { runId, repoUrl, selectedPhases, completedPhases, activePhase, status: stopped ? "cancelled" : analysisComplete ? "completed" : stopping ? "cancelling" : "running", provenance, mode, objective };
+    const snapshot: StoredWorkspace = { runId, companyName, selectedPhases, completedPhases, activePhase, status: stopped ? "cancelled" : analysisComplete ? "completed" : stopping ? "cancelling" : "running", provenance, mode, objective };
     window.sessionStorage.setItem(STORAGE_KEY, JSON.stringify(snapshot));
-  }, [analysisStarted, isDemo, runId, repoUrl, selectedPhases, completedPhases, activePhase, stopped, analysisComplete, stopping, provenance, mode, objective]);
+  }, [analysisStarted, isDemo, runId, companyName, selectedPhases, completedPhases, activePhase, stopped, analysisComplete, stopping, provenance, mode, objective]);
 
   function applyStatus(status: RunStatus) {
     const backendCompleted = status.completed_phases ?? [];
@@ -164,7 +164,7 @@ export default function Home() {
     const selected = backendSelected.filter((analysis) => !completed.includes(analysis));
     const viewedCompletedPhase = viewedCompletedPhaseRef.current;
     const nextActive = viewedCompletedPhase && completed.includes(viewedCompletedPhase) ? viewedCompletedPhase : status.active_phase || selected[0] || activePhase || completed[completed.length - 1] || analyses[0].id;
-    setRunId(status.run_id); setRepoUrl(status.company_name); setSelectedPhases(selected);
+    setRunId(status.run_id); setCompanyName(status.company_name); setSelectedPhases(selected);
     setCompletedPhases(completed); setActivePhase(nextActive);
     setFailedPhases((status.failures ?? []).map((failure) => failure.phase));
     setAnalysisResult((previous) => {
@@ -189,7 +189,7 @@ export default function Home() {
  /* function viewDemo() {
     if (!analysisResult) return;
     viewedCompletedPhaseRef.current = null;
-    setError(""); setRepoUrl(demoRepoUrl); setRunId(DEMO_RUN_ID); setIsDemo(true); setAnalysisStarted(true); setAnalysisComplete(true); setStopped(false);
+    setError(""); setCompanyName(demoRepoUrl); setRunId(DEMO_RUN_ID); setIsDemo(true); setAnalysisStarted(true); setAnalysisComplete(true); setStopped(false);
     setCompletedPhases(analyses.map((analysis) => analysis.id)); setActivePhase(analyses[0].id); setSelectionView(null); setFailedPhases([]); setProvenance(null);
   }*/
 
@@ -199,7 +199,7 @@ export default function Home() {
 
   viewedCompletedPhaseRef.current = null;
   setError("");
-  setRepoUrl(demoRepoUrl);
+  setCompanyName(demoRepoUrl);
   setRunId(demoFolder === "vercel-demo" ? "vercel-demo" : "uvdesk-demo");
   setIsDemo(true);
   setAnalysisStarted(true);
@@ -216,7 +216,7 @@ export default function Home() {
     event.preventDefault();
     const analysesToRun = selectedPhases.filter((analysis) => !completedPhases.includes(analysis));
     if (!provider || !model.trim() || !apiKey.trim()) { setError("Enter an AI provider, model, and API key before starting."); return; }
-    if (!repoUrl.trim() || analysesToRun.length === 0) { setError("Enter a company name and select at least one new financial analysis before starting."); return; }
+    if (!companyName.trim() || analysesToRun.length === 0) { setError("Enter a company name and select at least one new financial analysis before starting."); return; }
     viewedCompletedPhaseRef.current = null;
     continuationStartingRef.current = Boolean(runId && !isDemo);
     const nextRunId = runId && !isDemo ? runId : makeRunId();
@@ -224,7 +224,7 @@ export default function Home() {
     setCompletionMessages([]); setActivePhase(analysesToRun[0]);
     setCompletedPhases((previous) => isDemo ? [] : previous);
     setSelectedPhases(analysesToRun);
-    setAnalysisResult(isDemo ? emptyResult(repoUrl) : (analysisResult ?? emptyResult(repoUrl)));
+    setAnalysisResult(isDemo ? emptyResult(companyName) : (analysisResult ?? emptyResult(companyName)));
 
     try {
       const response = await fetch(`${API_BASE_URL}/api/analyze`, {
@@ -234,7 +234,7 @@ export default function Home() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          company_name: repoUrl,
+          company_name: companyName,
           selected_phases: analysesToRun,
           work_id: nextRunId,
           provider,
@@ -317,8 +317,8 @@ export default function Home() {
 
             if (resultKey) {
               setAnalysisResult((previous) => ({
-                ...(previous ?? emptyResult(repoUrl)),
-                company_name: repoUrl,
+                ...(previous ?? emptyResult(companyName)),
+                company_name: companyName,
                 [resultKey]: eventData.raw_analysis,
               }));
 
@@ -361,8 +361,8 @@ export default function Home() {
             setStopped(true);
             setCompletedPhases(eventData.completed_phases ?? []);
             setFailedPhases(
-              (eventData.failed_analyses ?? []).map(
-                (failure) => failure.analysis
+              (eventData.failed_phases ?? []).map(
+                (failure) => failure.phase
               )
             );
             setSelectedPhases((previous) =>
@@ -400,7 +400,7 @@ export default function Home() {
 
   function resetAnalysis() {
     viewedCompletedPhaseRef.current = null;
-    window.sessionStorage.removeItem(STORAGE_KEY); setAnalysisStarted(false); setIsDemo(false); setAnalysisComplete(false); setCompletedPhases([]); setCompletionMessages([]); setRepoUrl(""); setRunId(null); setProvider("openrouter"); setModel("openrouter/free"); setApiKey(""); setMode("parallel"); setObjective("document"); setShowApiKey(false); setSelectedPhases(defaultSelectedPhases); setSelectionView(null); setActivePhase(analyses[0].id); setAnalysisResult(null); setError(""); setLoading(false); setStopping(false); setStopped(false); setFailedPhases([]); setProvenance(null); continuationStartingRef.current = false;
+    window.sessionStorage.removeItem(STORAGE_KEY); setAnalysisStarted(false); setIsDemo(false); setAnalysisComplete(false); setCompletedPhases([]); setCompletionMessages([]); setCompanyName(""); setRunId(null); setProvider("openrouter"); setModel("openrouter/free"); setApiKey(""); setMode("parallel"); setObjective("document"); setShowApiKey(false); setSelectedPhases(defaultSelectedPhases); setSelectionView(null); setActivePhase(analyses[0].id); setAnalysisResult(null); setError(""); setLoading(false); setStopping(false); setStopped(false); setFailedPhases([]); setProvenance(null); continuationStartingRef.current = false;
   }
 
   const activePhaseDefinition = analyses.find((analysis) => analysis.id === activePhase) ?? analyses[0];
@@ -410,7 +410,7 @@ export default function Home() {
   const progressText = `${completedPhases.length} of ${denominator} analyses have completed. You can read completed analyses while the remaining analyses continue running.`;
 
   return <div className="app-shell">
-    <header className="topbar"><div><div className="brand">Financial Dossier</div><div className="tagline">SEC Company Facts → Financial Intelligence Dossier</div></div>{analysisStarted && repoUrl && <div className="repo-pill" title={repoUrl}>{repoUrl.replace(/^https?:\/\//, "")}</div>}</header>
+    <header className="topbar"><div><div className="brand">Financial Dossier</div><div className="tagline">SEC Company Facts → Financial Intelligence Dossier</div></div>{analysisStarted && companyName && <div className="repo-pill" title={companyName}>{companyName.replace(/^https?:\/\//, "")}</div>}</header>
     {!analysisStarted ? <main className="landing"><div className="landing-card"><div className="eyebrow">AI FINANCIAL ANALYSIS</div><h1>Turn SEC company facts into a financial intelligence dossier.</h1><p className="landing-copy">Submit a company name or SEC Company Facts JSON URL to progressively analyze earnings quality, financial resilience, capital deployment, and accounting signals from structured SEC XBRL data.</p>
       
       
@@ -456,14 +456,14 @@ export default function Home() {
 
       <fieldset className="analysis-selection" style={{ marginTop: 18 }}><legend>Analysis mode</legend><div style={{ display: "grid", gap: 10 }}><label className="analysis-option" style={{ alignItems: "flex-start" }} title="Parallel completes analyses faster. Sequential runs analyses one after another, allowing later analyses to use the results of earlier analyses."><input type="radio" name="analysis-mode" value="parallel" checked={mode === "parallel"} onChange={() => setMode("parallel")} disabled={loading} /><span><strong>Parallel</strong><br /><span style={{ color: "var(--muted)", fontSize: 12 }}>Runs analyses in parallel.</span></span></label><label className="analysis-option" style={{ alignItems: "flex-start" }} title="Parallel completes analyses faster. Sequential runs analyses one after another, allowing later analyses to use the results of earlier analyses."><input type="radio" name="analysis-mode" value="sequence" checked={mode === "sequence"} onChange={() => setMode("sequence")} disabled={loading} /><span><strong>Sequential</strong><br /><span style={{ color: "var(--muted)", fontSize: 12 }}>Runs analyses one after another; later analyses can use earlier analysis results.</span></span></label></div></fieldset>
 
-      <form onSubmit={analyze} className="repo-form"><input value={repoUrl} onChange={(event) => setRepoUrl(event.target.value)} placeholder="Company name or SEC Company Facts JSON URL" type="text" required aria-label="Company name or SEC Company Facts JSON URL" /><button type="submit" disabled={loading}>{loading ? "Analyzing..." : "Analyze"}</button></form>
+      <form onSubmit={analyze} className="repo-form"><input value={companyName} onChange={(event) => setCompanyName(event.target.value)} placeholder="Company name or SEC Company Facts JSON URL" type="text" required aria-label="Company name or SEC Company Facts JSON URL" /><button type="submit" disabled={loading}>{loading ? "Analyzing..." : "Analyze"}</button></form>
       <fieldset className="analysis-selection"><legend>Select analyses</legend><div className="analysis-selection-grid">{analyses.map((analysis) => <label key={analysis.id} className="analysis-option"><input type="checkbox" checked={selectedPhases.includes(analysis.id)} onChange={() => setSelectedPhases((previous) => previous.includes(analysis.id) ? previous.filter((id) => id !== analysis.id) : [...previous, analysis.id])} disabled={loading} /><span>{analysis.label}</span></label>)}</div></fieldset>
       {error && <div className="error-banner" role="alert">{error}</div>}<div className="landing-note">Analysis is performed by the backend financial analysis pipeline.</div>
     </div></main> : <div className="workspace">
       <aside className="sidebar"><div className="sidebar-heading">SDLC Dossier</div><div className="progress-label">{loading ? progressText : analysisComplete ? "Analysis complete" : stopped ? `${completedPhases.length} of ${denominator} analyses completed before stop` : error ? "Analysis failed" : "Analysis"}</div><nav className="analysis-nav" aria-label="analyses"><button className={`analysis-tab selection-tab ${selectionView === "setup" ? "active" : ""}`} onClick={() => { viewedCompletedPhaseRef.current = null; setSelectionView("setup"); }}><span className="analysis-number">00</span><span className="analysis-name">Select Analyses</span><span className="analysis-status">•</span></button>{analyses.map((analysis, index) => { const complete = completedPhases.includes(analysis.id); return <button key={analysis.id} className={`analysis-tab ${activePhase === analysis.id ? "active" : ""} ${!complete ? "locked" : ""}`} onClick={() => { if (complete) { viewedCompletedPhaseRef.current = analysis.id; setSelectionView(null); setActivePhase(analysis.id); } }} disabled={!complete}><span className="analysis-number">{String(index + 1).padStart(2, "0")}</span><span className="analysis-name">{analysis.label}</span><span className={`analysis-status ${complete ? "done" : ""}`}>{complete ? "✓" : "•"}</span></button>; })}</nav>{runId && !isDemo && completedPhases.length > 0 && <a className="download-button" href={`${API_BASE_URL}/api/analysis/${runId}/download`} download="sdlc-documentation.zip">Download completed work</a>}<button className="new-analysis" onClick={resetAnalysis} disabled={loading || stopping}>+ New repository</button></aside>
       <main className="content">
-        {selectionView === "setup" ? <section className="selection-panel"><div className="eyebrow">ANALYSIS SETUP</div><h1>Continue analysis</h1><p className="section-intro">Select additional analyses to run in this repository workspace. Completed analyses remain readable here and are not rerunnable in V1. To rerun a completed analysis, open a new browser tab/workspace.</p><fieldset className="analysis-selection"><legend>Run analyses</legend><div className="analysis-selection-grid">{analyses.map((analysis) => { const complete = completedPhases.includes(analysis.id); return <label key={analysis.id} className="analysis-option"><input type="checkbox" checked={!complete && selectedPhases.includes(analysis.id)} onChange={() => setSelectedPhases((previous) => previous.includes(analysis.id) ? previous.filter((id) => id !== analysis.id) : [...previous, analysis.id])} disabled={loading || stopping || complete} /><span>{analysis.label}{complete ? " (completed)" : ""}</span></label>; })}</div></fieldset><form onSubmit={analyze} className="repo-form"><input value={repoUrl} onChange={(event) => setRepoUrl(event.target.value)} placeholder="Company name or SEC Company Facts JSON URL" type="text" required aria-label="Company name or SEC Company Facts JSON URL" disabled={true} readOnly /><button type="submit" disabled={loading || stopping}>{loading ? "Running..." : "Run selected analyses"}</button></form>{error && <div className="error-banner" role="alert">{error}</div>}</section>
-        : isDemo ? <><section className="completion-banner"><div><div className="eyebrow">EXAMPLE DOCUMENTATION</div><h1>{repoUrl.includes("uvdesk") ? "UVdesk financial dossier" : "Vercel Commerce financial dossier"}</h1><p>Browse the pre-generated twelve-analysis reverse-engineering documentation.</p></div><div className="completion-mark">✓</div></section><section className="dossier-content"><div className="eyebrow">STAGE {String(analyses.findIndex((analysis) => analysis.id === activePhase) + 1).padStart(2, "0")}</div><h2>{activePhaseDefinition.label}</h2><p className="section-intro">Pre-generated reverse-engineering documentation for the {repoUrl.includes("uvdesk") ? "UVdesk" : "Vercel Commerce"} repository.</p><article className="evidence-card markdown-content">{activeResult ? <ReactMarkdown remarkPlugins={[remarkGfm]} components={{ code({ className, children, ...props }) { if (/language-mermaid/.test(className || "")) return <MermaidDiagram chart={String(children).replace(/\n$/, "")} />; return <code className={className} {...props}>{children}</code>; } }}>{activeResult}</ReactMarkdown> : <div className="mermaid-loading">Loading demo documentation...</div>}</article></section></>
+        {selectionView === "setup" ? <section className="selection-panel"><div className="eyebrow">ANALYSIS SETUP</div><h1>Continue analysis</h1><p className="section-intro">Select additional analyses to run in this repository workspace. Completed analyses remain readable here and are not rerunnable in V1. To rerun a completed analysis, open a new browser tab/workspace.</p><fieldset className="analysis-selection"><legend>Run analyses</legend><div className="analysis-selection-grid">{analyses.map((analysis) => { const complete = completedPhases.includes(analysis.id); return <label key={analysis.id} className="analysis-option"><input type="checkbox" checked={!complete && selectedPhases.includes(analysis.id)} onChange={() => setSelectedPhases((previous) => previous.includes(analysis.id) ? previous.filter((id) => id !== analysis.id) : [...previous, analysis.id])} disabled={loading || stopping || complete} /><span>{analysis.label}{complete ? " (completed)" : ""}</span></label>; })}</div></fieldset><form onSubmit={analyze} className="repo-form"><input value={companyName} onChange={(event) => setCompanyName(event.target.value)} placeholder="Company name or SEC Company Facts JSON URL" type="text" required aria-label="Company name or SEC Company Facts JSON URL" disabled={true} readOnly /><button type="submit" disabled={loading || stopping}>{loading ? "Running..." : "Run selected analyses"}</button></form>{error && <div className="error-banner" role="alert">{error}</div>}</section>
+        : isDemo ? <><section className="completion-banner"><div><div className="eyebrow">EXAMPLE DOCUMENTATION</div><h1>{companyName.includes("uvdesk") ? "UVdesk financial dossier" : "Vercel Commerce financial dossier"}</h1><p>Browse the pre-generated twelve-analysis reverse-engineering documentation.</p></div><div className="completion-mark">✓</div></section><section className="dossier-content"><div className="eyebrow">STAGE {String(analyses.findIndex((analysis) => analysis.id === activePhase) + 1).padStart(2, "0")}</div><h2>{activePhaseDefinition.label}</h2><p className="section-intro">Pre-generated reverse-engineering documentation for the {companyName.includes("uvdesk") ? "UVdesk" : "Vercel Commerce"} repository.</p><article className="evidence-card markdown-content">{activeResult ? <ReactMarkdown remarkPlugins={[remarkGfm]} components={{ code({ className, children, ...props }) { if (/language-mermaid/.test(className || "")) return <MermaidDiagram chart={String(children).replace(/\n$/, "")} />; return <code className={className} {...props}>{children}</code>; } }}>{activeResult}</ReactMarkdown> : <div className="mermaid-loading">Loading demo documentation...</div>}</article></section></>
         : <>{loading && <section className="progress-screen"><div className="spinner"/><div><div className="eyebrow">ANALYSIS IN PROGRESS</div><h1>Results are arriving progressively</h1><p>{progressText}</p>{stopping ? <p style={{ fontWeight: 700 }}>Stop requested. Waiting for the current backend work to unwind safely.</p> : <button type="button" onClick={stopAnalysis} disabled={stopping} style={{ minHeight: 42, padding: "0 16px", border: "1px solid #b42318", borderRadius: 8, background: "white", color: "#b42318", fontWeight: 700 }}>{stopping ? "Stopping analysis..." : "Stop analysis"}</button>}{completionMessages.length > 0 && <div className="completion-messages" aria-live="polite">{completionMessages.map((message) => <div key={message}>{message}</div>)}</div>}</div></section>}
           {stopped && <section className="completion-banner" style={{ borderColor: "#ead9c5", background: "#fffaf3" }}><div><div className="eyebrow">ANALYSIS STOPPED</div><h1>The analysis was stopped by the user.</h1><p>{completedPhases.length} of {denominator} analyses completed before stop.</p><button type="button" onClick={resetAnalysis} style={{ marginTop: 14, minHeight: 42, padding: "0 16px", border: 0, borderRadius: 8, background: "var(--accent)", color: "white", fontWeight: 700 }}>Back to Main Page</button></div></section>}
           {analysisComplete && <section className="completion-banner"><div><div className="eyebrow">REVERSE ENGINEERING COMPLETE</div><h1>Your financial dossier is ready.</h1><p>Visit the individual SDLC tabs on the left to explore the Financial Dossier.</p></div><div className="completion-mark">✓</div>{runId && <a className="download-button" href={`${API_BASE_URL}/api/analysis/${runId}/download`} download="sdlc-documentation.zip">Download ZIP</a>}</section>}

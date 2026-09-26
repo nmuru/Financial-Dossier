@@ -17,6 +17,7 @@ from .analyzer import analyze_repository
 from .config import settings
 from .memory_guard import MemoryCapacityError, MemoryCapacityGuard, capacity_diagnostics
 from .exporter import create_download_package
+from .edgar_financials import EdgarFinancialsError, collect_financial_statements
 from .run_control import RunCancelled, RunControl, load_persisted_run
 from .schemas import AnalyzeRequest
 
@@ -114,6 +115,15 @@ def _read_phase_result(run_id: str, phase: str) -> str | None:
 
 
 Thread(target=_ui_heartbeat_watchdog, daemon=True).start()
+
+
+@app.get("/api/financials/{identifier}")
+def financial_statements(identifier: str, periods: int = 5, view: str = "standard") -> dict[str, Any]:
+    """Return deterministic SEC financial statements collected through EdgarTools."""
+    try:
+        return collect_financial_statements(identifier, historical_periods=periods, view=view)
+    except EdgarFinancialsError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @app.get("/health")
@@ -238,7 +248,7 @@ def analyze(request: AnalyzeRequest) -> StreamingResponse:
         output_run_dir = _output_root() / resolved_run_id
         output_run_dir.mkdir(parents=True, exist_ok=True)
         control = RunControl(resolved_run_id, output_run_dir / "run-state.json")
-        control.initialize(repo_url=company_name, selected_phases=request.selected_phases)
+        control.initialize(company_name=company_name, selected_phases=request.selected_phases)
         with _run_controls_lock:
             _run_controls[resolved_run_id] = control
     except HTTPException:
@@ -260,28 +270,28 @@ def analyze(request: AnalyzeRequest) -> StreamingResponse:
                 if memory_guard.triggered.is_set():
                     control.finish("failed", MemoryCapacityError.user_message)
                     logger.warning("Analysis stopped by memory capacity guard work_id=%s", resolved_run_id)
-                    event_queue.put({"type": "analysis_failed", "repo_url": company_name, "run_id": resolved_run_id, "error": MemoryCapacityError.user_message})
+                    event_queue.put({"type": "analysis_failed", "company_name": company_name, "run_id": resolved_run_id, "error": MemoryCapacityError.user_message})
                 else:
                     control.finish("cancelled")
-                    event_queue.put({"type": "analysis_cancelled", "repo_url": company_name, "run_id": resolved_run_id, "completed_phases": list(results["results"].keys()), "failed_phases": results.get("failures", [])})
+                    event_queue.put({"type": "analysis_cancelled", "company_name": company_name, "run_id": resolved_run_id, "completed_phases": list(results["results"].keys()), "failed_phases": results.get("failures", [])})
             else:
                 control.finish("completed")
-                event_queue.put({"type": "analysis_completed", "repo_url": company_name, "run_id": results["run_id"], "completed_phases": list(results["results"].keys()), "failed_phases": results.get("failures", [])})
+                event_queue.put({"type": "analysis_completed", "company_name": company_name, "run_id": results["run_id"], "completed_phases": list(results["results"].keys()), "failed_phases": results.get("failures", [])})
         except RunCancelled:
             if memory_guard.triggered.is_set():
                 control.finish("failed", MemoryCapacityError.user_message)
                 logger.warning("Analysis stopped by memory capacity guard work_id=%s", control.run_id)
-                event_queue.put({"type": "analysis_failed", "repo_url": company_name, "run_id": control.run_id, "error": MemoryCapacityError.user_message})
+                event_queue.put({"type": "analysis_failed", "company_name": company_name, "run_id": control.run_id, "error": MemoryCapacityError.user_message})
             else:
                 control.finish("cancelled")
-                event_queue.put({"type": "analysis_cancelled", "repo_url": company_name, "run_id": control.run_id, "completed_phases": list(control.snapshot()["completed_phases"]), "failed_phases": control.snapshot()["failures"]})
+                event_queue.put({"type": "analysis_cancelled", "company_name": company_name, "run_id": control.run_id, "completed_phases": list(control.snapshot()["completed_phases"]), "failed_phases": control.snapshot()["failures"]})
         except (AgentRunnerError, ValueError) as exc:
             control.finish("failed", str(exc))
-            event_queue.put({"type": "analysis_failed", "repo_url": company_name, "run_id": control.run_id, "error": str(exc)})
+            event_queue.put({"type": "analysis_failed", "company_name": company_name, "run_id": control.run_id, "error": str(exc)})
         except Exception as exc:
             control.finish("failed", f"Analysis failed due to an unexpected backend error: {type(exc).__name__}: {exc}")
             logger.exception("Unexpected analysis failure: company_name=%s", company_name)
-            event_queue.put({"type": "analysis_failed", "repo_url": company_name, "run_id": control.run_id, "error": f"Analysis failed due to an unexpected backend error: {type(exc).__name__}: {exc}"})
+            event_queue.put({"type": "analysis_failed", "company_name": company_name, "run_id": control.run_id, "error": f"Analysis failed due to an unexpected backend error: {type(exc).__name__}: {exc}"})
         finally:
             memory_guard.stop()
 
