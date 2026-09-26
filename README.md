@@ -62,3 +62,58 @@ This information is intended to support engineering diagnostics and performance 
 Start the backend from `backend/` with the project's normal Python environment and start the frontend from `frontend/` with the package manager used by the repository. The frontend currently expects the backend at `http://localhost:8000`.
 
 Before using the application, provide a provider, model, API key, GitHub repository URL, and one or more SDLC phases. For repeat runs, keep the returned `run_id` and explicitly select phases to rerun within that workspace.
+
+## Run locally
+
+You can simulate the application on your Windows desktop by cloning this repository and running `start.bat`. The script creates the Python virtual environment and installs the backend dependencies from `backend/requirements.txt`, installs the frontend npm dependencies, and starts the FastAPI backend and Next.js frontend.
+
+Before running `start.bat`, make sure the following are installed:
+
+- **Git**
+- **Python 3.11+** with `python` available on PATH
+- **Node.js 20.9+** with `npm` available on PATH
+
+For the Financial Dossier, SEC access also requires an **EDGAR identity** (your name and email address). Set it in the terminal before starting the application, for example:
+
+```bat
+set EDGAR_IDENTITY=Your Name your.email@example.com
+```
+
+You also need an API key for the AI provider used by the application. The easiest way to try the UI without running an analysis is to use the pre-generated INFY and IBM demo data. To run a live financial analysis, enter your provider, model, and API key in the application.
+
+After cloning:
+
+```bat
+git clone https://github.com/nmuru/Financial-Dossier.git
+cd Financial-Dossier
+set EDGAR_IDENTITY=Your Name your.email@example.com
+start.bat
+```
+
+The frontend runs on the local Next.js development server, normally at **http://localhost:3000**. The backend runs on **http://localhost:8000**.
+
+**Windows note:** the current `start.bat` contains machine-specific paths from the author's development environment. If those paths do not match your machine, use the commands below instead of `start.bat`:
+
+```bat
+cd backend
+python -m venv .venv
+.venv\Scripts\python.exe -m pip install -r requirements.txt
+cd ..\frontend
+npm install
+```
+
+Then start the backend in one terminal:
+
+```bat
+cd backend
+set EDGAR_IDENTITY=Your Name your.email@example.com
+.venv\Scripts\python.exe -m uvicorn app.main:app --reload
+```
+
+and the frontend in another:
+
+```bat
+cd frontend
+npm run dev
+```
+
