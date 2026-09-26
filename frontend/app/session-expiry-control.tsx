@@ -5,7 +5,6 @@ import { useEffect, useRef } from "react";
 const STORAGE_KEY = "reverse-engineer-sdlc:v1-workspace";
 const SESSION_EXPIRY_MS = 24 * 60 * 60 * 1000;
 const API_BASE_URL = "https://financial-dossier.onrender.com";
-const
 const BACKEND_FAILURE_THRESHOLD = 5;
 const STATUS_POLL_MS = 5000;
 
