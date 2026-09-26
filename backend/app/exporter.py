@@ -195,8 +195,8 @@ def _create_download_package(work_dir: Path) -> Path:
     # the exact set of documents included in this package.
     index_path.write_text(_render_index(work_dir), encoding="utf-8")
 
-    zip_path = work_dir / "sdlc-documentation.zip"
-    temp_zip_path = work_dir / ".sdlc-documentation.zip.tmp"
+    zip_path = work_dir / "financial-analysis.zip"
+    temp_zip_path = work_dir / ".financial-analysis.zip.tmp"
     if temp_zip_path.exists():
         temp_zip_path.unlink()
 

@@ -217,7 +217,7 @@ def download_analysis(work_id: str) -> FileResponse:
         logger.warning("Unable to create analysis download work_id=%s: %s", work_id, exc)
         raise HTTPException(status_code=404, detail="Analysis download not found") from exc
 
-    return FileResponse(zip_path, media_type="application/zip", filename="sdlc-documentation.zip")
+    return FileResponse(zip_path, media_type="application/zip", filename="financial-analysis.zip")
 
 
 @app.post("/api/analyze")

@@ -7,8 +7,8 @@ import BackendCapacityControl from "./backend-capacity-control";
 import SessionExpiryControl from "./session-expiry-control";
 
 export const metadata: Metadata = {
-  title: "ReverseEngineer-SDLC",
-  description: "Reverse engineer GitHub repositories into SDLC documentation.",
+  title: "Financial Analysis",
+  description: "Reverse engineer GitHub repositories into financial analysis documentation.",
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {

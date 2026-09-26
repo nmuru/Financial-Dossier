@@ -71,9 +71,7 @@ The application is exclusively financial. Current intended analysis areas are:
 - Revenue & Earnings Engine
 - Financial Resilience
 - Capital & Cash Deployment
-- Accounting Signals & Anomalies
-
-A phase should focus on its assigned analytical question and should not drift into software architecture or SDLC documentation.
+- Accounting Signals & Anomalies 
 
 # Additional Financial Files
 

@@ -1,4 +1,4 @@
-"""LLM-assisted semantic summaries for SDLC reverse engineering.
+"""LLM-assisted semantic summaries for financial  analysis.
 
 The deterministic intelligence modules remain the auditable source of repository facts.
 This module adds bounded reasoning passes that summarize those supplied facts. The
@@ -77,7 +77,7 @@ REPOSITORY_RESEARCH_PROMPT = """You summarize repository facts that have already
 
 The repository was already scanned before this request. The supplied REPOSITORY INTELLIGENCE is the primary source material for this task. You also have limited read-only access to the already-cloned repository through two tools: read_file and search_repository. Use those tools only as an escape hatch when a specific important claim cannot be understood from the supplied intelligence. Never use them for repository-wide discovery or enumeration.
 
-Your task is to interpret the supplied facts and produce a compact narrative summary that helps downstream SDLC phases understand the repository.
+Your task is to interpret the supplied facts and produce a compact narrative summary that helps downstream phases understand the repository.
 
 Do not act like a coding agent. Do not create a research plan. Do not decide which files should be opened next. Do not enumerate repository files or generate broad search queries. Do not describe an investigation process.
 
@@ -90,7 +90,7 @@ Summarize only what can reasonably be inferred from the supplied information:
 4. Major capabilities and representative workflows visible in the supplied evidence
 5. Important entities, state, and relationships suggested by the supplied evidence
 6. External systems/integrations and their apparent roles
-7. Important implementation characteristics relevant across SDLC phases
+7. Important implementation characteristics relevant across financial analysis phases
 8. Ambiguities, contradictions, or areas where the supplied evidence is insufficient
 
 Rules:
@@ -128,7 +128,7 @@ PHASE_RESEARCH_PROMPTS = {
 def _phase_prompt(phase: str) -> str:
     return PHASE_RESEARCH_PROMPTS.get(
         phase,
-        "Summarize the most important evidence, behavior, relationships, and uncertainties relevant to this SDLC phase using only the supplied repository intelligence. Use repository tools only for a specific ambiguity. Do not propose further investigation.",
+        "Summarize the most important evidence, behavior, relationships, and uncertainties relevant to this financial analysis phase using only the supplied repository intelligence. Use repository tools only for a specific ambiguity. Do not propose further investigation.",
     )
 
 
@@ -292,9 +292,9 @@ def run_phase_research(*, phase: str, phase_intelligence: str, repository_resear
         + "\n\nProduce a semantic research brief for the downstream phase agent. Synthesize the strongest useful findings from the supplied intelligence, including important relationships, representative evidence paths, and material uncertainties where relevant. Do not invent unsupported details or turn this into a repository-wide enumeration. Remember: your objective is to produce a summary brief based on the supplied deterministic intelligence; do not let reasoning exhaust the available completion budget without completing the brief. Prioritize a useful finished brief over additional internal analysis.",
         MAX_PHASE_INPUT_CHARS,
     )
-    system_prompt = """You are a semantic research assistant inside an SDLC reverse-engineering pipeline.
+    system_prompt = """You are a semantic research assistant inside an financial analysis pipeline.
 
-The downstream phase agent is responsible for the actual SDLC analysis and final documentation. Your role is to provide a strong research brief that helps that agent understand the repository and reach source evidence efficiently. You are not required to perform the final phase analysis, but you should synthesize the supplied evidence thoroughly enough to be genuinely useful.
+The downstream phase agent is responsible for the actual financial analysis and final documentation. Your role is to provide a strong research brief that helps that agent understand the repository and reach source evidence efficiently. You are not required to perform the final phase analysis, but you should synthesize the supplied evidence thoroughly enough to be genuinely useful.
 
 The program has already supplied a repository-level semantic summary and deterministic phase intelligence. Use those as the primary source material. You have limited read-only access to the already-cloned repository through read_file and search_repository when a specific important point cannot be understood from the supplied material.
 
@@ -308,5 +308,5 @@ Remember: your objective is to complete a useful summary brief from the supplied
 
 def write_research_artifact(path: Path, *, kind: str, phase: Optional[str], content: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    header = [f"# {kind.title()} Research Brief", "", f"Research schema: {RESEARCH_VERSION}", f"Phase: {phase or 'repository-wide'}", "", "> This is an upstream reasoning artifact. It is not authoritative evidence or final SDLC documentation. Material claims must be verified against repository source.", ""]
+    header = [f"# {kind.title()} Research Brief", "", f"Research schema: {RESEARCH_VERSION}", f"Phase: {phase or 'repository-wide'}", "", "> This is an upstream reasoning artifact. It is not authoritative evidence or final financial analysis documentation. Material claims must be verified against repository source.", ""]
     path.write_text("\n".join(header) + content + "\n", encoding="utf-8")
