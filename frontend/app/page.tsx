@@ -47,7 +47,7 @@ type AnalysisEvent =
   | { type: "analysis_cancelled"; company_name: string; run_id: string; completed_phases: string[]; failed_phases?: Failure[] }
   | { type: "analysis_failed"; company_name: string; run_id?: string; error: string };
 type RunStatus = { run_id: string; status: string; company_name: string; selected_phases: string[]; completed_phases: string[]; failures: Failure[]; active_phase: string | null; results: Record<string, string> };
-type StoredWorkspace = { runId: string; companyName: string; selectedPhases: string[]; completedPhases: string[]; activePhase: string; status: string; provenance: { model: string } | null; mode: "parallel" | "sequence"; objective: "document" | "understand" };
+type StoredWorkspace = { runId: string; companyName: string; selectedPhases: string[]; completedPhases: string[]; activePhase: string; status: string; provenance: { model: string } | null; mode: "parallel" | "sequence" };
 
 const analyses: Phase[] = [
   { id: "revenue-earnings-engine", label: "Revenue & Earnings Engine", shortLabel: "Earnings Engine" },
@@ -89,7 +89,6 @@ export default function Home() {
   const [model, setModel] = useState("openrouter/free");
   const [apiKey, setApiKey] = useState("");
   const [mode, setMode] = useState<"parallel" | "sequence">("parallel");
-  const [objective, setObjective] = useState<"document" | "understand">("document");
   const [showApiKey, setShowApiKey] = useState(false);
   const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null);
   const [analysisStarted, setAnalysisStarted] = useState(false);
@@ -122,7 +121,7 @@ export default function Home() {
         if (!stored.runId || stored.runId === DEMO_RUN_ID) { window.sessionStorage.removeItem(STORAGE_KEY); setRestored(true); return; }
         const storedCompleted = stored.completedPhases ?? [];
         const storedSelected = (stored.selectedPhases?.length ? stored.selectedPhases : defaultSelectedPhases).filter((analysis) => !storedCompleted.includes(analysis));
-        setCompanyName(stored.companyName); setRunId(stored.runId); setSelectedPhases(storedSelected); setMode(stored.mode ?? "parallel"); setObjective(stored.objective ?? "document");
+        setCompanyName(stored.companyName); setRunId(stored.runId); setSelectedPhases(storedSelected); setMode(stored.mode ?? "parallel");
         setCompletedPhases(storedCompleted); setActivePhase(stored.activePhase || storedCompleted[storedCompleted.length - 1] || storedSelected[0] || analyses[0].id);
         setAnalysisStarted(true); setIsDemo(false); setProvenance(stored.provenance ?? null);
         const response = await fetch(`${API_BASE_URL}/api/analysis/${stored.runId}/status`, { cache: "no-store" });
@@ -156,9 +155,9 @@ export default function Home() {
 
   useEffect(() => {
     if (!analysisStarted || isDemo || !runId) return;
-    const snapshot: StoredWorkspace = { runId, companyName, selectedPhases, completedPhases, activePhase, status: stopped ? "cancelled" : analysisComplete ? "completed" : stopping ? "cancelling" : "running", provenance, mode, objective };
+    const snapshot: StoredWorkspace = { runId, companyName, selectedPhases, completedPhases, activePhase, status: stopped ? "cancelled" : analysisComplete ? "completed" : stopping ? "cancelling" : "running", provenance, mode };
     window.sessionStorage.setItem(STORAGE_KEY, JSON.stringify(snapshot));
-  }, [analysisStarted, isDemo, runId, companyName, selectedPhases, completedPhases, activePhase, stopped, analysisComplete, stopping, provenance, mode, objective]);
+  }, [analysisStarted, isDemo, runId, companyName, selectedPhases, completedPhases, activePhase, stopped, analysisComplete, stopping, provenance, mode]);
 
   function applyStatus(status: RunStatus) {
     const backendCompleted = status.completed_phases ?? [];
@@ -185,20 +184,10 @@ export default function Home() {
     try {
       const documents = await Promise.all(analyses.map(async (analysis) => { const response = await fetch(`/${demoFolder}/${analysis.id}.md`); if (!response.ok) throw new Error(`Unable to load demo document: ${analysis.id}.md (${response.status})`); return [analysis.id, await response.text()] as const; }));
       const result = emptyResult(demoCompanyName); for (const [analysisId, content] of documents) result[analysisResultMap[analysisId as Phase["id"]]] = content; setAnalysisResult(result);
-    } catch (err) { setError(err instanceof Error ? err.message : "Unable to load the Vercel Commerce demo documentation."); }
+    } catch (err) { setError(err instanceof Error ? err.message : "Unable to load the demo financial analysis documentation."); }
   }
-  //useEffect(() => { if (restored && !window.sessionStorage.getItem(STORAGE_KEY)) loadDemoDocumentation(); }, [restored]);
-
- /* function viewDemo() {
-    if (!analysisResult) return;
-    viewedCompletedPhaseRef.current = null;
-    setError(""); setCompanyName(demoCompanyName); setRunId(DEMO_RUN_ID); setIsDemo(true); setAnalysisStarted(true); setAnalysisComplete(true); setStopped(false);
-    setCompletedPhases(analyses.map((analysis) => analysis.id)); setActivePhase(analyses[0].id); setSelectionView(null); setFailedPhases([]); setProvenance(null);
-  }*/
-
-
-  async function viewDemo(demoFolder: string, demoRepoUrl: string) {
-  await loadDemoDocumentation(demoFolder, demoRepoUrl);
+  async function viewDemo(demoFolder: string, demoCompanyName: string) {
+  await loadDemoDocumentation(demoFolder, demoCompanyName);
 
   viewedCompletedPhaseRef.current = null;
   setError("");
@@ -244,7 +233,6 @@ export default function Home() {
           model,
           api_key: apiKey,
           mode,
-          objective,
         }),
       });
 
@@ -403,7 +391,7 @@ export default function Home() {
 
   function resetAnalysis() {
     viewedCompletedPhaseRef.current = null;
-    window.sessionStorage.removeItem(STORAGE_KEY); setAnalysisStarted(false); setIsDemo(false); setAnalysisComplete(false); setCompletedPhases([]); setCompletionMessages([]); setCompanyName(""); setRunId(null); setProvider("openrouter"); setModel("openrouter/free"); setApiKey(""); setMode("parallel"); setObjective("document"); setShowApiKey(false); setSelectedPhases(defaultSelectedPhases); setSelectionView(null); setActivePhase(analyses[0].id); setAnalysisResult(null); setError(""); setLoading(false); setStopping(false); setStopped(false); setFailedPhases([]); setProvenance(null); continuationStartingRef.current = false;
+    window.sessionStorage.removeItem(STORAGE_KEY); setAnalysisStarted(false); setIsDemo(false); setAnalysisComplete(false); setCompletedPhases([]); setCompletionMessages([]); setCompanyName(""); setRunId(null); setProvider("openrouter"); setModel("openrouter/free"); setApiKey(""); setMode("parallel"); setShowApiKey(false); setSelectedPhases(defaultSelectedPhases); setSelectionView(null); setActivePhase(analyses[0].id); setAnalysisResult(null); setError(""); setLoading(false); setStopping(false); setStopped(false); setFailedPhases([]); setProvenance(null); continuationStartingRef.current = false;
   }
 
   const activePhaseDefinition = analyses.find((analysis) => analysis.id === activePhase) ?? analyses[0];
