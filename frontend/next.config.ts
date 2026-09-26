@@ -4,7 +4,7 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   env: {
-    NEXT_PUBLIC_API_URL: "https://financial-dossier.vercel.app",
+    NEXT_PUBLIC_API_URL: "https://financial-dossier.onrender.com",
   },
 };
 
