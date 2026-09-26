@@ -361,8 +361,8 @@ export default function Home() {
             setStopped(true);
             setCompletedPhases(eventData.completed_phases ?? []);
             setFailedPhases(
-              (eventData.failed_analyses ?? []).map(
-                (failure) => failure.analysis
+              (eventData.failed_phases ?? []).map(
+                (failure) => failure.phase
               )
             );
             setSelectedPhases((previous) =>
