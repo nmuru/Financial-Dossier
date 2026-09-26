@@ -5,7 +5,7 @@ import { useEffect } from "react";
 // const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 const API_BASE_URL = "https://financial-dossier.onrender.com";
 const STORAGE_KEY = "reverse-engineer-sdlc:v1-workspace";
-const TOTAL_PHASES = 12;
+const TOTAL_PHASES = 4;
 
 type Failure = { phase?: string; phase_name?: string; error_type?: string; error?: string };
 
