@@ -66,14 +66,17 @@ const analysisResultMap: Record<Phase["id"], keyof AnalysisResult> = {
 
 // const API_BASE_URL = "http://localhost:8000";
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-const DEMO_REPO_URL = "https://github.com/vercel/commerce";
-const DEMO_RUN_ID = "vercel-demo";
+const DEMO_RUN_ID = "financial-demo";
+const DEMOS = {
+  infy: { folder: "infy-demo", label: "INFY SEC Demo", title: "INFY financial dossier" },
+  ibm: { folder: "ibm-demo", label: "IBM SEC Demo", title: "IBM financial dossier" },
+} as const;
 const providers = [
   { id: "openrouter", label: "OpenRouter", placeholder: "e.g. openai/gpt-5, anthropic/claude-sonnet-4" },
   { id: "openai", label: "OpenAI", placeholder: "e.g. gpt-5" },
 ];
 
-const STORAGE_KEY = "reverse-engineer-sdlc:v1-workspace";
+const STORAGE_KEY = "financial-analysis:v1-workspace";
 
 function emptyResult(companyName = ""): AnalysisResult {
   return { company_name: companyName, revenue_earnings_engine: "", financial_resilience: "", capital_cash_deployment: "", accounting_signals_anomalies: "" };
@@ -178,10 +181,10 @@ export default function Home() {
     else { setAnalysisComplete(false); setLoading(true); if (status.status === "cancelling") setStopping(true); }
   }
 
-  async function loadDemoDocumentation(demoFolder: string, demoRepoUrl: string) {
+  async function loadDemoDocumentation(demoFolder: string, demoCompanyName: string) {
     try {
       const documents = await Promise.all(analyses.map(async (analysis) => { const response = await fetch(`/${demoFolder}/${analysis.id}.md`); if (!response.ok) throw new Error(`Unable to load demo document: ${analysis.id}.md (${response.status})`); return [analysis.id, await response.text()] as const; }));
-      const result = emptyResult(demoRepoUrl); for (const [analysisId, content] of documents) result[analysisResultMap[analysisId as Phase["id"]]] = content; setAnalysisResult(result);
+      const result = emptyResult(demoCompanyName); for (const [analysisId, content] of documents) result[analysisResultMap[analysisId as Phase["id"]]] = content; setAnalysisResult(result);
     } catch (err) { setError(err instanceof Error ? err.message : "Unable to load the Vercel Commerce demo documentation."); }
   }
   //useEffect(() => { if (restored && !window.sessionStorage.getItem(STORAGE_KEY)) loadDemoDocumentation(); }, [restored]);
@@ -189,7 +192,7 @@ export default function Home() {
  /* function viewDemo() {
     if (!analysisResult) return;
     viewedCompletedPhaseRef.current = null;
-    setError(""); setCompanyName(demoRepoUrl); setRunId(DEMO_RUN_ID); setIsDemo(true); setAnalysisStarted(true); setAnalysisComplete(true); setStopped(false);
+    setError(""); setCompanyName(demoCompanyName); setRunId(DEMO_RUN_ID); setIsDemo(true); setAnalysisStarted(true); setAnalysisComplete(true); setStopped(false);
     setCompletedPhases(analyses.map((analysis) => analysis.id)); setActivePhase(analyses[0].id); setSelectionView(null); setFailedPhases([]); setProvenance(null);
   }*/
 
@@ -200,7 +203,7 @@ export default function Home() {
   viewedCompletedPhaseRef.current = null;
   setError("");
   setCompanyName(demoRepoUrl);
-  setRunId(demoFolder === "vercel-demo" ? "vercel-demo" : "uvdesk-demo");
+  setRunId(DEMO_RUN_ID);
   setIsDemo(true);
   setAnalysisStarted(true);
   setAnalysisComplete(true);
@@ -420,15 +423,15 @@ export default function Home() {
         <button
           type="button"
           className="demo-link"
-          onClick={() => viewDemo("financial-demo", "Microsoft")}
+          onClick={() => viewDemo(DEMOS.infy.folder, "INFY")}
           disabled={loading}
         >
-          Microsoft SEC Demo
+          {DEMOS.infy.label}
         </button>
         <button
           type="button"
           className="demo-link"
-          onClick={() => viewDemo("financial-demo", "IBM")}
+          onClick={() => viewDemo(DEMOS.ibm.folder, "IBM")}
           disabled={loading}
         >
           IBM SEC Demo
@@ -463,7 +466,7 @@ export default function Home() {
       <aside className="sidebar"><div className="sidebar-heading">financial analysis Dossier</div><div className="progress-label">{loading ? progressText : analysisComplete ? "Analysis complete" : stopped ? `${completedPhases.length} of ${denominator} analyses completed before stop` : error ? "Analysis failed" : "Analysis"}</div><nav className="analysis-nav" aria-label="analyses"><button className={`analysis-tab selection-tab ${selectionView === "setup" ? "active" : ""}`} onClick={() => { viewedCompletedPhaseRef.current = null; setSelectionView("setup"); }}><span className="analysis-number">00</span><span className="analysis-name">Select Analyses</span><span className="analysis-status">•</span></button>{analyses.map((analysis, index) => { const complete = completedPhases.includes(analysis.id); return <button key={analysis.id} className={`analysis-tab ${activePhase === analysis.id ? "active" : ""} ${!complete ? "locked" : ""}`} onClick={() => { if (complete) { viewedCompletedPhaseRef.current = analysis.id; setSelectionView(null); setActivePhase(analysis.id); } }} disabled={!complete}><span className="analysis-number">{String(index + 1).padStart(2, "0")}</span><span className="analysis-name">{analysis.label}</span><span className={`analysis-status ${complete ? "done" : ""}`}>{complete ? "✓" : "•"}</span></button>; })}</nav>{runId && !isDemo && completedPhases.length > 0 && <a className="download-button" href={`${API_BASE_URL}/api/analysis/${runId}/download`} download="financial-analysis.zip">Download completed work</a>}<button className="new-analysis" onClick={resetAnalysis} disabled={loading || stopping}>+ New repository</button></aside>
       <main className="content">
         {selectionView === "setup" ? <section className="selection-panel"><div className="eyebrow">ANALYSIS SETUP</div><h1>Continue analysis</h1><p className="section-intro">Select additional analyses to run in this repository workspace. Completed analyses remain readable here and are not rerunnable in V1. To rerun a completed analysis, open a new browser tab/workspace.</p><fieldset className="analysis-selection"><legend>Run analyses</legend><div className="analysis-selection-grid">{analyses.map((analysis) => { const complete = completedPhases.includes(analysis.id); return <label key={analysis.id} className="analysis-option"><input type="checkbox" checked={!complete && selectedPhases.includes(analysis.id)} onChange={() => setSelectedPhases((previous) => previous.includes(analysis.id) ? previous.filter((id) => id !== analysis.id) : [...previous, analysis.id])} disabled={loading || stopping || complete} /><span>{analysis.label}{complete ? " (completed)" : ""}</span></label>; })}</div></fieldset><form onSubmit={analyze} className="repo-form"><input value={companyName} onChange={(event) => setCompanyName(event.target.value)} placeholder="Company name or SEC Company Facts JSON URL" type="text" required aria-label="Company name or SEC Company Facts JSON URL" disabled={true} readOnly /><button type="submit" disabled={loading || stopping}>{loading ? "Running..." : "Run selected analyses"}</button></form>{error && <div className="error-banner" role="alert">{error}</div>}</section>
-        : isDemo ? <><section className="completion-banner"><div><div className="eyebrow">EXAMPLE DOCUMENTATION</div><h1>{companyName.includes("uvdesk") ? "UVdesk financial dossier" : "Vercel Commerce financial dossier"}</h1><p>Browse the pre-generated twelve-analysis reverse-engineering documentation.</p></div><div className="completion-mark">✓</div></section><section className="dossier-content"><div className="eyebrow">STAGE {String(analyses.findIndex((analysis) => analysis.id === activePhase) + 1).padStart(2, "0")}</div><h2>{activePhaseDefinition.label}</h2><p className="section-intro">Pre-generated reverse-engineering documentation for the {companyName.includes("uvdesk") ? "UVdesk" : "Vercel Commerce"} repository.</p><article className="evidence-card markdown-content">{activeResult ? <ReactMarkdown remarkPlugins={[remarkGfm]} components={{ code({ className, children, ...props }) { if (/language-mermaid/.test(className || "")) return <MermaidDiagram chart={String(children).replace(/\n$/, "")} />; return <code className={className} {...props}>{children}</code>; } }}>{activeResult}</ReactMarkdown> : <div className="mermaid-loading">Loading demo documentation...</div>}</article></section></>
+        : isDemo ? <><section className="completion-banner"><div><div className="eyebrow">EXAMPLE DOCUMENTATION</div><h1>{companyName === "INFY" ? DEMOS.infy.title : DEMOS.ibm.title}</h1><p>Browse the pre-generated twelve-analysis reverse-engineering documentation.</p></div><div className="completion-mark">✓</div></section><section className="dossier-content"><div className="eyebrow">STAGE {String(analyses.findIndex((analysis) => analysis.id === activePhase) + 1).padStart(2, "0")}</div><h2>{activePhaseDefinition.label}</h2><p className="section-intro">Pre-generated financial analysis documentation for {companyName === "INFY" ? "INFY" : "IBM"}.</p><article className="evidence-card markdown-content">{activeResult ? <ReactMarkdown remarkPlugins={[remarkGfm]} components={{ code({ className, children, ...props }) { if (/language-mermaid/.test(className || "")) return <MermaidDiagram chart={String(children).replace(/\n$/, "")} />; return <code className={className} {...props}>{children}</code>; } }}>{activeResult}</ReactMarkdown> : <div className="mermaid-loading">Loading demo documentation...</div>}</article></section></>
         : <>{loading && <section className="progress-screen"><div className="spinner"/><div><div className="eyebrow">ANALYSIS IN PROGRESS</div><h1>Results are arriving progressively</h1><p>{progressText}</p>{stopping ? <p style={{ fontWeight: 700 }}>Stop requested. Waiting for the current backend work to unwind safely.</p> : <button type="button" onClick={stopAnalysis} disabled={stopping} style={{ minHeight: 42, padding: "0 16px", border: "1px solid #b42318", borderRadius: 8, background: "white", color: "#b42318", fontWeight: 700 }}>{stopping ? "Stopping analysis..." : "Stop analysis"}</button>}{completionMessages.length > 0 && <div className="completion-messages" aria-live="polite">{completionMessages.map((message) => <div key={message}>{message}</div>)}</div>}</div></section>}
           {stopped && <section className="completion-banner" style={{ borderColor: "#ead9c5", background: "#fffaf3" }}><div><div className="eyebrow">ANALYSIS STOPPED</div><h1>The analysis was stopped by the user.</h1><p>{completedPhases.length} of {denominator} analyses completed before stop.</p><button type="button" onClick={resetAnalysis} style={{ marginTop: 14, minHeight: 42, padding: "0 16px", border: 0, borderRadius: 8, background: "var(--accent)", color: "white", fontWeight: 700 }}>Back to Main Page</button></div></section>}
           {analysisComplete && <section className="completion-banner"><div><div className="eyebrow">REVERSE ENGINEERING COMPLETE</div><h1>Your financial dossier is ready.</h1><p>Visit the individual analysis tabs on the left to explore the Financial Dossier.</p></div><div className="completion-mark">✓</div>{runId && <a className="download-button" href={`${API_BASE_URL}/api/analysis/${runId}/download`} download="financial-analysis.zip">Download ZIP</a>}</section>}
