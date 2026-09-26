@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+const API_BASE_URL = "https://financial-dossier.onrender.com";
 const STORAGE_KEY = "reverse-engineer-sdlc:v1-workspace";
 
 export default function WorkspaceCloseControl() {
