@@ -436,7 +436,7 @@ export default function Home() {
       </div>
 
 
-      <p style={{ marginTop: 20 }}>
+      {/* <p style={{ marginTop: 20 }}>
         <a
           className="guide-link"
           href="/guide-and-tips.html"
@@ -445,7 +445,7 @@ export default function Home() {
         >
           Guide & Tips
         </a>
-      </p>    
+      </p>     */}
 
 
 
